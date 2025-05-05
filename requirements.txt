@@ -1,0 +1,4 @@
+fastapi
+uvicorn[standard] # For HTTP server
+pydantic
+# sqlite3 is built-in
