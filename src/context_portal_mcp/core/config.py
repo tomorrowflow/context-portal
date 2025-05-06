@@ -1,9 +1,13 @@
 import os
 import pathlib
+import logging
 
 # Placeholder for application settings and configuration logic
 
+log = logging.getLogger(__name__)
+
 def get_database_path(workspace_id: str) -> pathlib.Path:
+    log.debug(f"get_database_path received workspace_id: {workspace_id}")
     """
     Determines the path to the SQLite database file for a given workspace.
 
@@ -22,9 +26,13 @@ def get_database_path(workspace_id: str) -> pathlib.Path:
         raise ValueError(f"Invalid workspace_id: {workspace_id}")
 
     workspace_path = pathlib.Path(workspace_id)
+    log.debug(f"Constructed workspace_path: {workspace_path}")
     db_dir = workspace_path / ".context_portal"
+    log.debug(f"Constructed db_dir: {db_dir}")
+    log.debug(f"Attempting mkdir for: {db_dir}")
     db_dir.mkdir(exist_ok=True) # Ensure the directory exists
     db_path = db_dir / "context.db"
+    log.debug(f"Constructed db_path: {db_path}")
     return db_path
 
 # Example usage (can be removed later)

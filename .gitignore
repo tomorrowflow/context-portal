@@ -6,6 +6,10 @@ generate_mcp_yaml.py
 generate_mcp_yaml
 install_rooflow.sh
 system_prompt.md
+backup/
+mcp-reference/
+.rooignore
+projectBrief.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

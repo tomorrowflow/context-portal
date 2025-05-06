@@ -48,7 +48,7 @@ class CustomData(BaseModel):
     id: Optional[int] = None # Auto-incremented by DB
     category: str
     key: str
-    value: Json[Any] # Store arbitrary JSON data
+    value: Any # Store arbitrary JSON data (SQLAlchemy handles JSON str conversion for DB)
 
 # --- MCP Tool Argument Models ---
 
@@ -121,6 +121,18 @@ class DeleteCustomDataArgs(BaseArgs):
     category: str = Field(..., min_length=1, description="Category of the data to delete")
     key: str = Field(..., min_length=1, description="Key of the data to delete")
 
+# --- Export Tool ---
+
+class ExportConportToMarkdownArgs(BaseArgs):
+    """Arguments for exporting ConPort data to markdown files."""
+    output_path: Optional[str] = Field(None, description="Optional output directory path relative to workspace_id. Defaults to './conport_export/' if not provided.")
+
+# --- Import Tool ---
+
+class ImportMarkdownToConportArgs(BaseArgs):
+    """Arguments for importing markdown files into ConPort data."""
+    input_path: Optional[str] = Field(None, description="Optional input directory path relative to workspace_id containing markdown files. Defaults to './conport_export/' if not provided.")
+
 # Dictionary mapping tool names to their expected argument models (for potential future use/validation)
 # Note: The primary validation happens in the handler using these models.
 TOOL_ARG_MODELS = {
@@ -137,4 +149,6 @@ TOOL_ARG_MODELS = {
     "log_custom_data": LogCustomDataArgs,
     "get_custom_data": GetCustomDataArgs,
     "delete_custom_data": DeleteCustomDataArgs,
+    "export_conport_to_markdown": ExportConportToMarkdownArgs,
+    "import_markdown_to_conport": ImportMarkdownToConportArgs,
 }
