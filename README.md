@@ -13,7 +13,7 @@ Key features include:
 *   MCP server (`context_portal_mcp`) built with Python/FastAPI.
 *   Defined MCP tools for interaction (e.g., `log_decision`, `get_active_context`).
 *   Multi-workspace support via `workspace_id`.
-*   Dual deployment modes: Stdio and Local HTTP.
+*   Deployment mode: Stdio.
 
 ## Setup & Installation
 
@@ -23,7 +23,7 @@ It is recommended to use `uv` for Python environment and package management.
     ```bash
     uv venv
     source .venv/bin/activate  # Linux/macOS
-    # .venv\Scripts\activate  # Windows
+    .venv\Scripts\activate  # Windows
     ```
 
 2.  **Install dependencies:**
@@ -33,9 +33,9 @@ It is recommended to use `uv` for Python environment and package management.
 
 ## Running the ConPort Server
 
-The ConPort server can be run in two primary modes:
+The ConPort server is run in STDIO mode.
 
-### 1. STDIO Mode (Recommended for IDE Integration)
+### STDIO Mode (Recommended for IDE Integration)
 
 This mode is ideal for tight integration with an IDE (like Roo Code), where the IDE spawns and manages the server process for the current workspace.
 
@@ -46,20 +46,9 @@ This mode is ideal for tight integration with an IDE (like Roo Code), where the 
 *   Replace `"/actual/path/to/your/project_workspace"` with the absolute path to the workspace whose context you want ConPort to manage. The IDE typically provides this path dynamically (e.g., via a variable like `${workspaceFolder}`).
 *   ConPort will create/use a database file at `your_project_workspace/.context_portal/data.sqlite`.
 
-### 2. HTTP Mode (for Broader Access or Standalone Use)
-
-This mode runs ConPort as an HTTP server, making it accessible over the network.
-
-*   **Command:**
-    ```bash
-    uv run python src/context_portal_mcp/main.py --mode http --host 127.0.0.1 --port 8123
-    ```
-*   This starts the server on `http://127.0.0.1:8123`. The JSON-RPC endpoint will be `/mcp`.
-*   When using HTTP mode, ensure the `workspace_id` is correctly passed by clients in their tool call arguments, as the server itself doesn't have an inherent workspace context when run standalone like this (unless a default is implemented or configured via environment variables, which is not the current setup).
-
 ## Client Configuration
 
-MCP clients (like IDE extensions or other tools) need to be configured to connect to a running ConPort instance. Here are example configurations:
+MCP clients (like IDE extensions or other tools) need to be configured to connect to a running ConPort instance.
 
 ### For STDIO Mode (e.g., in Roo Code's `.vscode/mcp.json` or global settings)
 
@@ -90,22 +79,6 @@ This tells the IDE how to launch the ConPort server for the current workspace.
 ```
 *   **Important:** Replace `/path/to/your/context-portal-mcp-repo` with the actual absolute path to where you have cloned *this* ConPort server project.
 *   `${workspaceFolder}` is a common IDE variable representing the root of the project the user currently has open (for which ConPort will manage context).
-
-### For HTTP Mode (Clients connecting to an already running HTTP server)
-
-```json
-{
-  "mcpServers": {
-    "conport_http": {
-      "name": "Context Portal (ConPort) - HTTP",
-      "description": "Connects to a running ConPort HTTP server.",
-      "url": "http://127.0.0.1:8123/mcp", // Default URL
-      "disabled": false,
-      "alwaysAllow": []
-    }
-  }
-}
-```
 
 ## Usage with LLM Agents (via `conport_memory_strategy.yml`)
 
