@@ -21,7 +21,8 @@ conport_memory_strategy:
     # 5. Invoke ConPort tool `get_progress` using `use_mcp_tool` with server `conport` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "limit": 5}`. Internalize the retrieved data. Briefly confirm successful loading and proceed. Do not echo full raw data.
     # 6. Invoke ConPort tool `get_system_patterns` using `use_mcp_tool` with server `conport` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID"}`. Internalize the retrieved data. Briefly confirm successful loading and proceed. Do not echo full raw data.
     # 7. Invoke ConPort tool `get_custom_data` using `use_mcp_tool` with server `conport` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "category": "critical_settings"}`. Internalize the retrieved data. Briefly confirm successful loading and proceed. Do not echo full raw data.
-    # 8. If all initial `get_*` calls are successful and return expected data structures (even if empty), set internal status to [CONPORT_MEMORY: ACTIVE] and inform user: "ConPort memory initialized and all contexts loaded. How can I assist you?" (The agent should then use the ask_followup_question tool).
+    # 8. Invoke ConPort tool `get_custom_data` using `use_mcp_tool` with server `conport` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "category": "ProjectGlossary"}`. Internalize all retrieved glossary terms and definitions. Briefly confirm successful loading and proceed. Do not echo full raw data.
+    # 9. If all initial `get_*` calls are successful and return expected data structures (even if empty), set internal status to [CONPORT_MEMORY: ACTIVE] and inform user: "ConPort memory initialized and all contexts loaded. How can I assist you?" (The agent should then use the ask_followup_question tool).
 
   if_conport_unavailable_or_init_failed: |
     <thinking>

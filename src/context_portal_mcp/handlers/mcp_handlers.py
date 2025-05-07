@@ -97,6 +97,25 @@ def handle_get_decisions(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
     except Exception as e:
         raise ContextPortalError(f"Unexpected error in get_decisions: {e}")
 
+def handle_search_decisions_fts(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Handles the 'search_decisions_fts' MCP tool."""
+    try:
+        args_model = models.SearchDecisionsArgs(**arguments)
+    except ValidationError as e:
+        raise ToolArgumentError(f"Invalid arguments for search_decisions_fts: {e}")
+
+    try:
+        decisions_list = db.search_decisions_fts(
+            args_model.workspace_id,
+            query_term=args_model.query_term,
+            limit=args_model.limit
+        )
+        return [d.model_dump(mode='json') for d in decisions_list]
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error searching decisions: {e}")
+    except Exception as e:
+        raise ContextPortalError(f"Unexpected error in search_decisions_fts: {e}")
+
 def handle_get_active_context(arguments: Dict[str, Any]) -> Dict[str, Any]:
     """Handles the 'get_active_context' MCP tool."""
     try:
@@ -259,6 +278,26 @@ def handle_delete_custom_data(arguments: Dict[str, Any]) -> Dict[str, Any]:
         raise ContextPortalError(f"Database error deleting custom data: {e}")
     except Exception as e:
         raise ContextPortalError(f"Unexpected error in delete_custom_data: {e}")
+
+def handle_search_project_glossary_fts(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Handles the 'search_project_glossary_fts' MCP tool."""
+    try:
+        args_model = models.SearchProjectGlossaryArgs(**arguments)
+    except ValidationError as e:
+        raise ToolArgumentError(f"Invalid arguments for search_project_glossary_fts: {e}")
+
+    try:
+        glossary_entries = db.search_project_glossary_fts(
+            args_model.workspace_id,
+            query_term=args_model.query_term,
+            limit=args_model.limit
+        )
+        # Results are already models.CustomData, so model_dump them
+        return [entry.model_dump(mode='json') for entry in glossary_entries]
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error searching project glossary: {e}")
+    except Exception as e:
+        raise ContextPortalError(f"Unexpected error in search_project_glossary_fts: {e}")
 
 # --- Export Tool Handler ---
 
@@ -621,6 +660,7 @@ TOOL_DESCRIPTIONS = {
     "update_active_context": "Updates the current working context in ConPort.",
     "log_decision": "Logs an architectural or implementation decision to ConPort.",
     "get_decisions": "Retrieves logged decisions from ConPort, optionally limited.",
+    "search_decisions_fts": "Searches decisions using Full-Text Search for a given query term.",
     "log_progress": "Logs a progress entry or task status to ConPort.",
     "get_progress": "Retrieves progress entries from ConPort, optionally filtered.",
     "log_system_pattern": "Logs or updates a system/coding pattern used in the project to ConPort.",
@@ -628,6 +668,7 @@ TOOL_DESCRIPTIONS = {
     "log_custom_data": "Stores or updates a custom key-value data entry under a category in ConPort.",
     "get_custom_data": "Retrieves custom data entries from ConPort, optionally filtered by category/key.",
     "delete_custom_data": "Deletes a specific custom data entry from ConPort.",
+    "search_project_glossary_fts": "Searches the ProjectGlossary (custom data category) using Full-Text Search.",
     "export_conport_to_markdown": "Exports all ConPort data for a workspace to markdown files in a specified output directory (defaults to './conport_export/')."
 }
 
@@ -669,6 +710,7 @@ TOOL_HANDLERS = {
     "update_active_context": handle_update_active_context,
     "log_decision": handle_log_decision,
     "get_decisions": handle_get_decisions,
+    "search_decisions_fts": handle_search_decisions_fts, # Added new handler
     "log_progress": handle_log_progress,
     "get_progress": handle_get_progress,
     "log_system_pattern": handle_log_system_pattern,
@@ -676,6 +718,7 @@ TOOL_HANDLERS = {
     "log_custom_data": handle_log_custom_data,
     "get_custom_data": handle_get_custom_data,
     "delete_custom_data": handle_delete_custom_data,
+    "search_project_glossary_fts": handle_search_project_glossary_fts, # Added new handler
     "export_conport_to_markdown": handle_export_conport_to_markdown,
     "import_markdown_to_conport": handle_import_markdown_to_conport,
 }

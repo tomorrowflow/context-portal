@@ -79,6 +79,39 @@ def initialize_database(conn: sqlite3.Connection):
             )
         """)
 
+        # FTS5 table for decisions
+        cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS decisions_fts USING fts5(
+                summary,
+                rationale,
+                implementation_details,
+                -- contentless table, data comes from triggers
+                tokenize = 'porter unicode61' -- Optional: improves stemming for various languages
+            )
+        """)
+
+        # Triggers to keep decisions_fts synchronized with decisions table
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS decisions_ai AFTER INSERT ON decisions BEGIN
+                INSERT INTO decisions_fts (rowid, summary, rationale, implementation_details)
+                VALUES (new.id, new.summary, new.rationale, new.implementation_details);
+            END;
+        """)
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS decisions_ad AFTER DELETE ON decisions BEGIN
+                DELETE FROM decisions_fts WHERE rowid=old.id;
+            END;
+        """)
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS decisions_au AFTER UPDATE ON decisions BEGIN
+                UPDATE decisions_fts SET
+                    summary = new.summary,
+                    rationale = new.rationale,
+                    implementation_details = new.implementation_details
+                WHERE rowid=new.id;
+            END;
+        """)
+
         # Progress Entries
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS progress_entries (
@@ -109,6 +142,47 @@ def initialize_database(conn: sqlite3.Connection):
                 value TEXT NOT NULL, -- Store as JSON string
                 UNIQUE(category, key)
             )
+        """)
+
+        # FTS5 table for custom_data (specifically for ProjectGlossary)
+        cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS custom_data_fts USING fts5(
+                term,             -- Will store the 'key' from custom_data
+                definition_text,  -- Will store the 'value' (as text) from custom_data
+                tokenize = 'porter unicode61'
+            )
+        """)
+
+        # Triggers to keep custom_data_fts synchronized for 'ProjectGlossary' category
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS custom_data_glossary_ai
+            AFTER INSERT ON custom_data
+            WHEN new.category = 'ProjectGlossary'
+            BEGIN
+                INSERT INTO custom_data_fts (rowid, term, definition_text)
+                VALUES (new.id, new.key, new.value); -- new.value is already a JSON string, FTS5 will index its text content
+            END;
+        """)
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS custom_data_glossary_ad
+            AFTER DELETE ON custom_data
+            WHEN old.category = 'ProjectGlossary'
+            BEGIN
+                DELETE FROM custom_data_fts WHERE rowid=old.id;
+            END;
+        """)
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS custom_data_glossary_au
+            AFTER UPDATE ON custom_data
+            BEGIN
+                -- Handle case where category changes to/from ProjectGlossary or key/value changes
+                -- Delete old entry if it was a glossary item or if its key/value changed
+                DELETE FROM custom_data_fts WHERE rowid=old.id AND old.category = 'ProjectGlossary';
+                -- Insert new entry if it is now a glossary item
+                INSERT INTO custom_data_fts (rowid, term, definition_text)
+                SELECT new.id, new.key, new.value
+                WHERE new.category = 'ProjectGlossary';
+            END;
         """)
 
         conn.commit()
@@ -246,6 +320,44 @@ def get_decisions(workspace_id: str, limit: Optional[int] = None) -> List[models
         raise DatabaseError(f"Failed to retrieve decisions: {e}")
     finally:
         cursor.close()
+
+def search_decisions_fts(workspace_id: str, query_term: str, limit: Optional[int] = 10) -> List[models.Decision]:
+    """Searches decisions using FTS5 for the given query term."""
+    conn = get_db_connection(workspace_id)
+    cursor = conn.cursor()
+    # The MATCH operator is used for FTS queries.
+    # We join back to the original 'decisions' table to get all columns.
+    # 'rank' is an FTS5 auxiliary function that indicates relevance.
+    sql = """
+        SELECT d.id, d.timestamp, d.summary, d.rationale, d.implementation_details
+        FROM decisions_fts f
+        JOIN decisions d ON f.rowid = d.id
+        WHERE f.decisions_fts MATCH ? ORDER BY rank
+    """
+    params_list = [query_term]
+
+    if limit is not None and limit > 0:
+        sql += " LIMIT ?"
+        params_list.append(limit)
+
+    try:
+        cursor.execute(sql, tuple(params_list))
+        rows = cursor.fetchall()
+        decisions_found = [
+            models.Decision(
+                id=row['id'],
+                timestamp=row['timestamp'],
+                summary=row['summary'],
+                rationale=row['rationale'],
+                implementation_details=row['implementation_details']
+            ) for row in rows
+        ]
+        return decisions_found
+    except sqlite3.Error as e:
+        raise DatabaseError(f"Failed FTS search on decisions for term '{query_term}': {e}")
+    finally:
+        cursor.close()
+
 def log_progress(workspace_id: str, progress_data: models.ProgressEntry) -> models.ProgressEntry:
     """Logs a new progress entry."""
     conn = get_db_connection(workspace_id)
@@ -474,6 +586,50 @@ def delete_custom_data(workspace_id: str, category: str, key: str) -> bool:
         raise DatabaseError(f"Failed to delete custom data for '{category}/{key}': {e}")
     finally:
         cursor.close()
+
+def search_project_glossary_fts(workspace_id: str, query_term: str, limit: Optional[int] = 10) -> List[models.CustomData]:
+    """Searches ProjectGlossary entries in custom_data using FTS5."""
+    conn = get_db_connection(workspace_id)
+    cursor = conn.cursor()
+    sql = """
+        SELECT cd.id, cd.category, cd.key, cd.value
+        FROM custom_data_fts fts
+        JOIN custom_data cd ON fts.rowid = cd.id
+        WHERE fts.custom_data_fts MATCH ? AND cd.category = 'ProjectGlossary'
+        ORDER BY rank
+    """
+    # Note: The MATCH query will search across 'term' and 'definition_text' columns in custom_data_fts
+    params_list = [query_term]
+
+    if limit is not None and limit > 0:
+        sql += " LIMIT ?"
+        params_list.append(limit)
+
+    try:
+        cursor.execute(sql, tuple(params_list))
+        rows = cursor.fetchall()
+        glossary_entries = []
+        for row in rows:
+            try:
+                value_data = json.loads(row['value'])
+                glossary_entries.append(
+                    models.CustomData(
+                        id=row['id'],
+                        category=row['category'],
+                        key=row['key'],
+                        value=value_data
+                    )
+                )
+            except json.JSONDecodeError as e:
+                # Log or handle error for specific row if JSON is invalid
+                print(f"Warning: Failed to decode JSON for glossary item id={row['id']}: {e}") # Replace with proper logging
+                continue # Skip this row
+        return glossary_entries
+    except sqlite3.Error as e:
+        raise DatabaseError(f"Failed FTS search on ProjectGlossary for term '{query_term}': {e}")
+    finally:
+        cursor.close()
+
 # (All planned CRUD functions implemented)
 
 # --- Cleanup ---

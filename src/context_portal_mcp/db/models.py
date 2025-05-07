@@ -78,6 +78,11 @@ class GetDecisionsArgs(BaseArgs):
     """Arguments for retrieving decisions."""
     limit: Optional[int] = Field(None, gt=0, description="Maximum number of decisions to return (most recent first)")
 
+class SearchDecisionsArgs(BaseArgs):
+    """Arguments for searching decisions using FTS."""
+    query_term: str = Field(..., min_length=1, description="The term to search for in decisions.")
+    limit: Optional[int] = Field(10, gt=0, description="Maximum number of search results to return.")
+
 # --- Progress Tools ---
 
 class LogProgressArgs(BaseArgs):
@@ -121,6 +126,11 @@ class DeleteCustomDataArgs(BaseArgs):
     category: str = Field(..., min_length=1, description="Category of the data to delete")
     key: str = Field(..., min_length=1, description="Key of the data to delete")
 
+class SearchProjectGlossaryArgs(BaseArgs):
+    """Arguments for searching the ProjectGlossary using FTS."""
+    query_term: str = Field(..., min_length=1, description="The term to search for in the glossary.")
+    limit: Optional[int] = Field(10, gt=0, description="Maximum number of search results to return.")
+
 # --- Export Tool ---
 
 class ExportConportToMarkdownArgs(BaseArgs):
@@ -142,6 +152,7 @@ TOOL_ARG_MODELS = {
     "update_active_context": UpdateContextArgs,
     "log_decision": LogDecisionArgs,
     "get_decisions": GetDecisionsArgs,
+    "search_decisions_fts": SearchDecisionsArgs, # Added new tool
     "log_progress": LogProgressArgs,
     "get_progress": GetProgressArgs,
     "log_system_pattern": LogSystemPatternArgs,
@@ -149,6 +160,7 @@ TOOL_ARG_MODELS = {
     "log_custom_data": LogCustomDataArgs,
     "get_custom_data": GetCustomDataArgs,
     "delete_custom_data": DeleteCustomDataArgs,
+    "search_project_glossary_fts": SearchProjectGlossaryArgs, # Added new tool
     "export_conport_to_markdown": ExportConportToMarkdownArgs,
     "import_markdown_to_conport": ImportMarkdownToConportArgs,
 }
