@@ -153,9 +153,9 @@ This tells the IDE how to launch the ConPort server for the current workspace.
         "--workspace_id",
         "${workspaceFolder}"
       ],
-      "cwd": "/path/to/your/context-portal-mcp-repo", // Should be the root of THIS ConPort server project
+      "cwd": "/path/to/your/project-workspace", 
       "disabled": false,
-      "alwaysAllow": [] // Optionally list tool names to bypass user confirmation
+      "alwaysAllow": [] 
     }
   }
 }
@@ -167,14 +167,26 @@ This tells the IDE how to launch the ConPort server for the current workspace.
 
 ## Usage with LLM Agents (via `conport_memory_strategy.yml`)
 
-The `conport_memory_strategy.yml` file in this repository provides a comprehensive set of custom instructions for LLM agents. These instructions guide an agent on how to:
+The `conport_memory_strategy.yml` file in this repository is designed to be used as **custom instructions or a system prompt** for an LLM agent that is connected to the ConPort MCP server.
 
-*   **Initialize Context:** At the start of a session, load existing project information (product overview, active tasks, decisions, etc.) from ConPort using its `get_*` tools.
-*   **Update Context:** Throughout a session, as new information is generated or decisions are made, use ConPort's `log_*` and `update_*` tools to save this context persistently.
-*   **Manage Custom Data:** Store and retrieve project-specific information that doesn't fit the standard context categories using `log_custom_data` and `get_custom_data`.
-*   **Follow Triggers:** Understand when and how to update different aspects of the project's memory in ConPort.
+**Purpose of `conport_memory_strategy.yml`:**
 
-By equipping an LLM agent with these instructions (typically as part of its system prompt) and connecting it to a running ConPort server for the relevant workspace, the agent can maintain a structured and persistent understanding of the project, leading to more informed and context-aware assistance.
+This file provides the LLM agent with the necessary guidance to effectively interact with the ConPort server and manage project context. It includes instructions on:
+
+*   **Initialization:** How the agent should load existing context from ConPort at the start of a session using the `get_*` tools.
+*   **Context Updates:** When and how the agent should use the `log_*` and `update_*` tools to save new information, decisions, and progress to ConPort throughout a session.
+*   **Custom Data Management:** How to store, retrieve, and delete project-specific custom data using the `log_custom_data`, `get_custom_data`, and `delete_custom_data` tools.
+*   **Triggers:** Specific events or user commands that should prompt the agent to update the ConPort memory.
+*   **Workspace Identification:** The critical importance of using the correct `workspace_id` for all ConPort tool calls to ensure context is managed for the active project.
+
+**How to Use `conport_memory_strategy.yml`:**
+
+To enable your LLM agent to utilize ConPort for structured project memory, you need to **copy the entire content** of the `conport_memory_strategy.yml` file and add it to your LLM's custom instructions or system prompt area.
+
+The exact method for adding custom instructions varies depending on the LLM interface or platform you are using (e.g., a specific IDE extension, a web-based chat interface, or an API configuration). Consult the documentation for your specific LLM interface to find where to add these instructions.
+
+By providing these instructions to your LLM, you equip it with the "knowledge" of how to leverage the ConPort server's capabilities for persistent and structured project context management, leading to more informed and consistent assistance across sessions and tasks.
+
 The `workspace_id` is crucial for all ConPort tool interactions to ensure the agent is working with the correct project's data.
 
 ## Available ConPort Tools
