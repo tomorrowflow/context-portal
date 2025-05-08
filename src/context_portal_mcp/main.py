@@ -1,245 +1,550 @@
 import sys
-# sys.stderr.write("MINIMAL MAIN.PY: Script started VERY EARLY\\n") # Keeping this one for now
-# sys.stderr.flush()
-
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request # Added HTTPException, Request
-from fastapi.responses import JSONResponse # Removed StreamingResponse
-import logging # Added
-import json # Added back
-import argparse # Added back
-from typing import Dict, Any, Optional # Added back
-# import asyncio # No longer needed for SSE
+from fastapi import FastAPI
+import logging
+import argparse
+from typing import Dict, Any, Optional, AsyncIterator, List # Added AsyncIterator and List
+from contextlib import asynccontextmanager # Added
 
-# sys.stderr.write("MINIMAL MAIN.PY: Standard imports done.\\n"); sys.stderr.flush()
+# MCP SDK imports
+from mcp.server.fastmcp import FastMCP, Context as MCPContext # Renamed Context to avoid clash
+# ServerInfo from mcp.server.models was an incorrect import path.
+# FastMCP takes name directly. Version for serverInfo capability is often handled by the SDK.
 
-# Local imports (adjust relative paths if structure changes)
-# sys.stderr.write("MINIMAL MAIN.PY: Attempting local imports (try block)...\\n"); sys.stderr.flush()
+# Local imports
 try:
-    # sys.stderr.write("MINIMAL MAIN.PY: Importing .handlers...\\n"); sys.stderr.flush()
-    from .handlers import mcp_handlers
-    from .core import exceptions
-    from .db import database # To ensure cleanup runs if http mode is used
-    # sys.stderr.write("MINIMAL MAIN.PY: Local imports in try block successful.\\n"); sys.stderr.flush()
+    from .handlers import mcp_handlers # We will adapt these
+    from .db import database, models # models for tool argument types
+    from .core import exceptions # For custom exceptions if FastMCP doesn't map them
 except ImportError:
-    # sys.stderr.write("MINIMAL MAIN.PY: ImportError occurred, falling back to except block imports...\\n"); sys.stderr.flush()
     import os
-    # sys.stderr.write("MINIMAL MAIN.PY: Imported os in except block.\\n"); sys.stderr.flush()
-    # This path needs to be correct for when main.py is run as a script from its own dir
-    # For -m src.context_portal_mcp.main, CWD is project root, so src. is findable
-    # If running script directly from project root: python src/context_portal_mcp/main.py
-    # then __file__ is src/context_portal_mcp/main.py, dirname is src/context_portal_mcp
-    # then ../.. is project_root. So this sys.path.insert should be generally okay.
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
     from src.context_portal_mcp.handlers import mcp_handlers
+    from src.context_portal_mcp.db import database, models
     from src.context_portal_mcp.core import exceptions
-    from src.context_portal_mcp.db import database
-    # sys.stderr.write("MINIMAL MAIN.PY: Local imports in except block successful.\\n"); sys.stderr.flush()
 
-sys.stderr.write("MAIN.PY: All imports done.\\n"); sys.stderr.flush() # Simplified prefix
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s') # Added
-# sys.stderr.write("MINIMAL MAIN.PY: logging.basicConfig done.\\n"); sys.stderr.flush()
-log = logging.getLogger(__name__) # Added
-# sys.stderr.write("MINIMAL MAIN.PY: Logger obtained (log global var).\\n"); sys.stderr.flush()
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+log = logging.getLogger(__name__)
 
-app = FastAPI()
+# --- Lifespan Management for FastMCP ---
+@asynccontextmanager
+async def conport_lifespan(server: FastMCP) -> AsyncIterator[None]:
+    """Manage application lifecycle for ConPort."""
+    log.info("ConPort FastMCP server lifespan starting.")
+    # Database initialization is handled by get_db_connection on first access per workspace.
+    # No explicit global startup needed for DB here unless we want to pre-connect to a default.
+    try:
+        yield None  # Server runs
+    finally:
+        log.info("ConPort FastMCP server lifespan shutting down. Closing all DB connections.")
+        database.close_all_connections()
 
-# sys.stderr.write("MINIMAL MAIN.PY: FastAPI app instantiated.\\n")
-# sys.stderr.flush()
+# --- FastMCP Server Instance ---
+# Version from pyproject.toml would be ideal here, or define centrally
+CONPORT_VERSION = "0.1.0"
 
+conport_mcp = FastMCP(
+    name="ConPort", # Pass name directly
+    # The version for the serverInfo capability response will be handled by FastMCP,
+    # potentially from package metadata or a default.
+    lifespan=conport_lifespan
+)
+
+# --- FastAPI App ---
+# The FastAPI app will be the main ASGI app, and FastMCP will be mounted onto it.
+# We keep our own FastAPI app instance in case we want to add other non-MCP HTTP endpoints later.
+app = FastAPI(title="ConPort MCP Server Wrapper", version=CONPORT_VERSION)
+
+# --- Adapt and Register Tools with FastMCP ---
+# This section replaces the old mcp_handlers.dispatch_tool and TOOL_HANDLERS
+
+# Example for get_product_context
+# Note: The original handlers returned the full JSON-RPC response.
+# FastMCP tool handlers should return the direct result data.
+# FastMCP uses type hints on the handler for input validation if no schema is provided.
+# We use our Pydantic models as input_schema for robust validation.
+
+@conport_mcp.tool(name="get_product_context")
+async def tool_get_product_context(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_get_product_context received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        # raw_args_from_fastmcp directly contains the arguments e.g. {'workspace_id': '...'}
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: 'workspace_id' not found in raw_args_from_fastmcp for get_product_context. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for get_product_context")
+        pydantic_args = models.GetContextArgs(workspace_id=workspace_id_val)
+        return mcp_handlers.handle_get_product_context(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_product_context handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_product_context: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing get_product_context: {type(e).__name__}")
+
+@conport_mcp.tool(name="update_product_context")
+async def tool_update_product_context(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_update_product_context received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        content_val = raw_args_from_fastmcp.get("content")
+        if workspace_id_val is None or content_val is None: # Check for both required fields
+            log.error(f"CRITICAL: Missing 'workspace_id' or 'content' in raw_args_from_fastmcp for update_product_context. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' or 'content' in arguments for update_product_context")
+        pydantic_args = models.UpdateContextArgs(workspace_id=workspace_id_val, content=content_val)
+        return mcp_handlers.handle_update_product_context(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in update_product_context handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for update_product_context: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing update_product_context: {type(e).__name__}")
+
+@conport_mcp.tool(name="get_active_context")
+async def tool_get_active_context(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_get_active_context received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: 'workspace_id' not found in raw_args_from_fastmcp for get_active_context. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for get_active_context")
+        pydantic_args = models.GetContextArgs(workspace_id=workspace_id_val)
+        return mcp_handlers.handle_get_active_context(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_active_context handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_active_context: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing get_active_context: {type(e).__name__}")
+
+@conport_mcp.tool(name="update_active_context")
+async def tool_update_active_context(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_update_active_context received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        content_val = raw_args_from_fastmcp.get("content")
+        if workspace_id_val is None or content_val is None:
+            log.error(f"CRITICAL: Missing 'workspace_id' or 'content' in raw_args_from_fastmcp for update_active_context. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' or 'content' in arguments for update_active_context")
+        pydantic_args = models.UpdateContextArgs(workspace_id=workspace_id_val, content=content_val)
+        return mcp_handlers.handle_update_active_context(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in update_active_context handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for update_active_context: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing update_active_context: {type(e).__name__}")
+
+@conport_mcp.tool(name="log_decision")
+async def tool_log_decision(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_log_decision received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        # Extract all fields for LogDecisionArgs
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        summary_val = raw_args_from_fastmcp.get("summary")
+        if workspace_id_val is None or summary_val is None: # Required fields
+            log.error(f"CRITICAL: Missing 'workspace_id' or 'summary' for log_decision. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' or 'summary' in arguments for log_decision")
+        pydantic_args = models.LogDecisionArgs(
+            workspace_id=workspace_id_val,
+            summary=summary_val,
+            rationale=raw_args_from_fastmcp.get("rationale"), # Optional
+            implementation_details=raw_args_from_fastmcp.get("implementation_details") # Optional
+        )
+        
+        return mcp_handlers.handle_log_decision(pydantic_args) # Pass Pydantic model
+    except exceptions.ContextPortalError as e: # Catch errors from the handler
+        log.error(f"Error in log_decision handler: {e}")
+        raise
+    except Exception as e: # Catch other errors like Pydantic validation or the ValueError above
+        log.error(f"Error processing args for log_decision: {e}. Received raw: {raw_args_from_fastmcp}")
+        # Re-raise; FastMCP should convert this to an internal server error for the client.
+        # Avoids exposing too much detail unless FastMCP already does that.
+        raise exceptions.ContextPortalError(f"Server error processing log_decision: {type(e).__name__}")
+
+@conport_mcp.tool(name="get_decisions")
+async def tool_get_decisions(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
+    sys.stderr.write(f"MAIN.PY: tool_get_decisions received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: 'workspace_id' not found for get_decisions. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for get_decisions")
+        pydantic_args = models.GetDecisionsArgs(
+            workspace_id=workspace_id_val,
+            limit=raw_args_from_fastmcp.get("limit") # Optional
+        )
+        return mcp_handlers.handle_get_decisions(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_decisions handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_decisions: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing get_decisions: {type(e).__name__}")
+
+@conport_mcp.tool(name="search_decisions_fts")
+async def tool_search_decisions_fts(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
+    sys.stderr.write(f"MAIN.PY: tool_search_decisions_fts received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        query_term_val = raw_args_from_fastmcp.get("query_term")
+        if workspace_id_val is None or query_term_val is None:
+            log.error(f"CRITICAL: Missing 'workspace_id' or 'query_term' for search_decisions_fts. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' or 'query_term' in arguments for search_decisions_fts")
+        pydantic_args = models.SearchDecisionsArgs(
+            workspace_id=workspace_id_val,
+            query_term=query_term_val,
+            limit=raw_args_from_fastmcp.get("limit") # Optional
+        )
+        return mcp_handlers.handle_search_decisions_fts(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in search_decisions_fts handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for search_decisions_fts: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing search_decisions_fts: {type(e).__name__}")
+
+@conport_mcp.tool(name="log_progress")
+async def tool_log_progress(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_log_progress received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        status_val = raw_args_from_fastmcp.get("status")
+        description_val = raw_args_from_fastmcp.get("description")
+        if workspace_id_val is None or status_val is None or description_val is None:
+            log.error(f"CRITICAL: Missing required fields for log_progress. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id', 'status', or 'description' in arguments for log_progress")
+        pydantic_args = models.LogProgressArgs(
+            workspace_id=workspace_id_val,
+            status=status_val,
+            description=description_val,
+            parent_id=raw_args_from_fastmcp.get("parent_id") # Optional
+        )
+        return mcp_handlers.handle_log_progress(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in log_progress handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for log_progress: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing log_progress: {type(e).__name__}")
+
+@conport_mcp.tool(name="get_progress")
+async def tool_get_progress(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
+    sys.stderr.write(f"MAIN.PY: tool_get_progress received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: 'workspace_id' not found for get_progress. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for get_progress")
+        pydantic_args = models.GetProgressArgs(
+            workspace_id=workspace_id_val,
+            status_filter=raw_args_from_fastmcp.get("status_filter"), # Optional
+            parent_id_filter=raw_args_from_fastmcp.get("parent_id_filter"), # Optional
+            limit=raw_args_from_fastmcp.get("limit") # Optional
+        )
+        return mcp_handlers.handle_get_progress(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_progress handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_progress: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing get_progress: {type(e).__name__}")
+
+@conport_mcp.tool(name="log_system_pattern")
+async def tool_log_system_pattern(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_log_system_pattern received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        name_val = raw_args_from_fastmcp.get("name")
+        if workspace_id_val is None or name_val is None:
+            log.error(f"CRITICAL: Missing 'workspace_id' or 'name' for log_system_pattern. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' or 'name' in arguments for log_system_pattern")
+        pydantic_args = models.LogSystemPatternArgs(
+            workspace_id=workspace_id_val,
+            name=name_val,
+            description=raw_args_from_fastmcp.get("description") # Optional
+        )
+        return mcp_handlers.handle_log_system_pattern(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in log_system_pattern handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for log_system_pattern: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing log_system_pattern: {type(e).__name__}")
+
+@conport_mcp.tool(name="get_system_patterns")
+async def tool_get_system_patterns(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
+    sys.stderr.write(f"MAIN.PY: tool_get_system_patterns received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: 'workspace_id' not found for get_system_patterns. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for get_system_patterns")
+        pydantic_args = models.GetSystemPatternsArgs(workspace_id=workspace_id_val)
+        return mcp_handlers.handle_get_system_patterns(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_system_patterns handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_system_patterns: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing get_system_patterns: {type(e).__name__}")
+
+@conport_mcp.tool(name="log_custom_data")
+async def tool_log_custom_data(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_log_custom_data received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        category_val = raw_args_from_fastmcp.get("category")
+        key_val = raw_args_from_fastmcp.get("key")
+        value_val = raw_args_from_fastmcp.get("value") # Pydantic will validate 'Any'
+        if workspace_id_val is None or category_val is None or key_val is None or value_val is None: # value is required by model
+            log.error(f"CRITICAL: Missing required fields for log_custom_data. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id', 'category', 'key', or 'value' in arguments for log_custom_data")
+        pydantic_args = models.LogCustomDataArgs(
+            workspace_id=workspace_id_val,
+            category=category_val,
+            key=key_val,
+            value=value_val
+        )
+        return mcp_handlers.handle_log_custom_data(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in log_custom_data handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for log_custom_data: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing log_custom_data: {type(e).__name__}")
+
+@conport_mcp.tool(name="get_custom_data")
+async def tool_get_custom_data(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
+    sys.stderr.write(f"MAIN.PY: tool_get_custom_data received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: 'workspace_id' not found for get_custom_data. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for get_custom_data")
+        pydantic_args = models.GetCustomDataArgs(
+            workspace_id=workspace_id_val,
+            category=raw_args_from_fastmcp.get("category"), # Optional
+            key=raw_args_from_fastmcp.get("key") # Optional
+        )
+        return mcp_handlers.handle_get_custom_data(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_custom_data handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_custom_data: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing get_custom_data: {type(e).__name__}")
+
+@conport_mcp.tool(name="delete_custom_data")
+async def tool_delete_custom_data(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_delete_custom_data received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        category_val = raw_args_from_fastmcp.get("category")
+        key_val = raw_args_from_fastmcp.get("key")
+        if workspace_id_val is None or category_val is None or key_val is None:
+            log.error(f"CRITICAL: Missing required fields for delete_custom_data. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id', 'category', or 'key' in arguments for delete_custom_data")
+        pydantic_args = models.DeleteCustomDataArgs(
+            workspace_id=workspace_id_val,
+            category=category_val,
+            key=key_val
+        )
+        return mcp_handlers.handle_delete_custom_data(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in delete_custom_data handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for delete_custom_data: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing delete_custom_data: {type(e).__name__}")
+@conport_mcp.tool(name="search_project_glossary_fts")
+async def tool_search_project_glossary_fts(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
+    sys.stderr.write(f"MAIN.PY: tool_search_project_glossary_fts received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        query_term_val = raw_args_from_fastmcp.get("query_term")
+        if workspace_id_val is None or query_term_val is None:
+            log.error(f"CRITICAL: Missing 'workspace_id' or 'query_term' for search_project_glossary_fts. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' or 'query_term' in arguments for search_project_glossary_fts")
+        pydantic_args = models.SearchProjectGlossaryArgs(
+            workspace_id=workspace_id_val,
+            query_term=query_term_val,
+            limit=raw_args_from_fastmcp.get("limit") # Optional
+        )
+        return mcp_handlers.handle_search_project_glossary_fts(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in search_project_glossary_fts handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for search_project_glossary_fts: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing search_project_glossary_fts: {type(e).__name__}")
+
+@conport_mcp.tool(name="export_conport_to_markdown")
+async def tool_export_conport_to_markdown(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_export_conport_to_markdown received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: 'workspace_id' not found for export_conport_to_markdown. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for export_conport_to_markdown")
+        pydantic_args = models.ExportConportToMarkdownArgs(
+            workspace_id=workspace_id_val,
+            output_path=raw_args_from_fastmcp.get("output_path") # Optional
+        )
+        return mcp_handlers.handle_export_conport_to_markdown(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in export_conport_to_markdown handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for export_conport_to_markdown: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing export_conport_to_markdown: {type(e).__name__}")
+
+@conport_mcp.tool(name="import_markdown_to_conport")
+async def tool_import_markdown_to_conport(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_import_markdown_to_conport received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: 'workspace_id' not found for import_markdown_to_conport. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for import_markdown_to_conport")
+        pydantic_args = models.ImportMarkdownToConportArgs(
+            workspace_id=workspace_id_val,
+            input_path=raw_args_from_fastmcp.get("input_path") # Optional
+        )
+        return mcp_handlers.handle_import_markdown_to_conport(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in import_markdown_to_conport handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for import_markdown_to_conport: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing import_markdown_to_conport: {type(e).__name__}")
+
+# Mount the FastMCP SSE app to the FastAPI app at the /mcp path
+# This will handle GET for SSE and POST for JSON-RPC client requests
+app.mount("/mcp", conport_mcp.sse_app())
+log.info("Mounted FastMCP app at /mcp")
+
+# Keep a simple root endpoint for health checks or basic info
 @app.get("/")
 async def read_root():
-    return {"Hello": "World"}
+    return {"message": "ConPort MCP Server is running. MCP endpoint at /mcp"}
 
-@app.post("/mcp") # Standard endpoint for JSON-RPC calls
-async def mcp_route_handler(request: Request):
-    """Handles JSON-RPC (POST) on /mcp."""
-    # POST logic starts here
-    log.debug(f"HTTP POST /mcp: Request received from {request.client.host if request.client else 'unknown'}")
-    try:
-        payload = await request.json()
-        log.info(f"Received HTTP JSON-RPC call: {payload}") # Existing INFO log
-        log.debug(f"HTTP /mcp: Calling handle_mcp_message with payload: {payload}")
-        response_content = handle_mcp_message(payload)
-        log.debug(f"HTTP /mcp: handle_mcp_message returned: {response_content}")
-        if response_content:
-            log.info(f"Sending HTTP JSON-RPC response: {response_content}")
-            return JSONResponse(content=response_content)
-        else:
-            # For notifications, typically return HTTP 204 No Content or 202 Accepted
-            log.info("Processed notification, no content to return.")
-            return JSONResponse(content=None, status_code=204)
-    except json.JSONDecodeError:
-        log.error("HTTP Request body is not valid JSON")
-        # JSON-RPC Parse Error
-        error_resp = create_jsonrpc_error_response(JSONRPCErrorCodes.PARSE_ERROR, "Parse error", None)
-        return JSONResponse(content=error_resp, status_code=400)
-    except Exception as e: # Catch-all for unexpected errors during handle_mcp_message or FastAPI processing
-        log.exception("Unexpected error handling HTTP JSON-RPC call")
-        # Attempt to get request_id if payload was parsed, otherwise None
-        request_id = None
-        try:
-            if 'payload' not in locals(): # if payload failed to parse
-                 payload = await request.json() # try again, might fail
-            request_id = payload.get("id")
-        except: #  Ignore if we can't get ID during an error
-            pass
-        error_resp = create_jsonrpc_error_response(JSONRPCErrorCodes.INTERNAL_ERROR, f"Internal server error: {e}", request_id)
-        return JSONResponse(content=error_resp, status_code=500)
+# STDIO mode execution (if needed directly, though FastMCP might have its own way)
+# For now, we'll keep our stdio_run function but it won't be the primary way if using FastMCP for HTTP.
+# FastMCP's `mcp.run()` or `mcp dev` might be the new way for stdio.
+# The `pyproject.toml` script points to `cli_entry_point` which will run uvicorn for HTTP.
+# If stdio is still desired as a direct execution mode for the *packaged* tool,
+# `main_logic` would need to be adapted to call something like `conport_mcp.run(transport="stdio")`
+# instead of uvicorn.
 
-# --- MCP Message Handling Logic (JSON-RPC 2.0 Compliant) ---
-# SSE related code (sse_generator and its uses) has been removed.
-# Copied from original full script
+# For now, the focus is HTTP via FastMCP mounting.
+# The old stdio_mode and manual JSON-RPC message handling can be removed.
 
-def create_jsonrpc_success_response(result_data: Dict[str, Any], request_id: Any) -> Dict[str, Any]:
-    """Formats a successful JSON-RPC 2.0 response."""
-    return {
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "result": result_data
-    }
-
-def create_jsonrpc_error_response(code: int, message_text: str, request_id: Any, data: Optional[Any] = None) -> Dict[str, Any]:
-    """Formats a JSON-RPC 2.0 error response."""
-    error_obj = {"code": code, "message": message_text}
-    if data is not None:
-        error_obj["data"] = data
-    return {
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "error": error_obj
-    }
-
-class JSONRPCErrorCodes:
-    PARSE_ERROR = -32700
-    INVALID_REQUEST = -32600
-    METHOD_NOT_FOUND = -32601
-    INVALID_PARAMS = -32602
-    INTERNAL_ERROR = -32603
-    SERVER_ERROR_DEFAULT = -32000
-    TOOL_EXECUTION_ERROR = -32001
-
-def handle_mcp_message(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    request_id = message.get("id")
-    if message.get("jsonrpc") != "2.0":
-        return create_jsonrpc_error_response(JSONRPCErrorCodes.INVALID_REQUEST, "Invalid JSON-RPC version", request_id)
-    method = message.get("method")
-    params = message.get("params", {})
-    if not method:
-        return create_jsonrpc_error_response(JSONRPCErrorCodes.INVALID_REQUEST, "Missing 'method'", request_id)
-    if not isinstance(params, dict):
-         return create_jsonrpc_error_response(JSONRPCErrorCodes.INVALID_REQUEST, "'params' must be an object", request_id)
-    
-    log.info(f"Received JSON-RPC method: {method}, params: {params}, id: {request_id}")
-
-    if method == "initialize":
-        log.info(f"Handling 'initialize' request with params: {params}")
-        server_capabilities_payload = {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {"tools": {"listChanged": True}},
-            "serverInfo": {"name": "ConPort-MinimalTest", "version": "0.0.1-minimal"}
-        }
-        return create_jsonrpc_success_response(server_capabilities_payload, request_id)
-    elif method == "tools/list":
-        try:
-            log.info("Handling 'tools/list' request.")
-            result_payload = mcp_handlers.handle_list_tools(params)
-            return create_jsonrpc_success_response(result_payload, request_id)
-        except Exception as e:
-            log.exception("Unexpected error handling tools/list")
-            return create_jsonrpc_error_response(JSONRPCErrorCodes.SERVER_ERROR_DEFAULT, f"Server error: {e}", request_id)
-    elif method == "tools/call":
-        tool_name = params.get("name")
-        tool_arguments = params.get("arguments", {})
-        if not tool_name: return create_jsonrpc_error_response(JSONRPCErrorCodes.INVALID_PARAMS, "Missing 'name'", request_id)
-        try:
-            log.info(f"Dispatching tool call: {tool_name} with args: {tool_arguments}")
-            raw_tool_result = mcp_handlers.dispatch_tool(tool_name, tool_arguments)
-            json_string_payload = json.dumps(raw_tool_result)
-            mcp_text_content = {"type": "text", "text": json_string_payload}
-            formatted_result_payload = {"content": [mcp_text_content], "isError": False}
-            return create_jsonrpc_success_response(formatted_result_payload, request_id)
-        except NotImplementedError as e: return create_jsonrpc_error_response(JSONRPCErrorCodes.METHOD_NOT_FOUND, str(e), request_id)
-        except exceptions.ToolArgumentError as e: return create_jsonrpc_error_response(JSONRPCErrorCodes.INVALID_PARAMS, str(e), request_id)
-        except exceptions.ContextPortalError as e: return create_jsonrpc_error_response(JSONRPCErrorCodes.TOOL_EXECUTION_ERROR, str(e), request_id, data={"error_type": e.__class__.__name__})
-        except Exception as e:
-            log.exception(f"Unexpected error dispatching tool {tool_name}")
-            return create_jsonrpc_error_response(JSONRPCErrorCodes.INTERNAL_ERROR, f"Internal server error: {e}", request_id)
-    else:
-        log.warning(f"Method not found: {method}")
-        return create_jsonrpc_error_response(JSONRPCErrorCodes.METHOD_NOT_FOUND, f"Method not found: {method}", request_id)
-
-def run_stdio_mode():
-    """Runs the server in stdio mode, reading/writing JSON-RPC 2.0 lines."""
-    # Ensure log is defined (it should be from global scope)
-    log.info("Starting Context Portal MCP Server in stdio mode (JSON-RPC 2.0)... Waiting for messages.")
-    # No initial message; server waits for client's initialize request.
-    try:
-        for line in sys.stdin:
-            line = line.strip()
-            if not line:
-                continue # Skip empty lines
-
-            log.debug(f"Received stdio line: {line}")
-            try:
-                message = json.loads(line)
-            except json.JSONDecodeError:
-                log.error(f"Failed to decode JSON: {line}")
-                # Ensure create_jsonrpc_error_response and JSONRPCErrorCodes are defined
-                response = create_jsonrpc_error_response(JSONRPCErrorCodes.PARSE_ERROR, f"Invalid JSON received: {line}", None) 
-            else:
-                # Ensure handle_mcp_message is defined
-                response = handle_mcp_message(message)
-
-            if response: # handle_mcp_message can return None for notifications
-                response_line = json.dumps(response)
-                log.debug(f"Sending stdio JSON-RPC response: {response_line}")
-                print(response_line, flush=True)
-
-    except KeyboardInterrupt:
-        log.info("Stdio mode interrupted by user.")
-    except Exception as e:
-        log.exception("Unexpected error in stdio mode")
-    finally:
-        log.info("Stdio mode shutting down.")
-        # Ensure database is imported and has close_all_connections
-        if 'database' in globals() and hasattr(database, 'close_all_connections'):
-            database.close_all_connections() 
-        else:
-            sys.stderr.write("MINIMAL MAIN.PY: STDERR - 'database' module or 'close_all_connections' not found for stdio shutdown.\\n"); sys.stderr.flush()
-# sys.stderr.write("MINIMAL MAIN.PY: Helper functions and all routes defined. Approaching __main__ check.\\n")
-# sys.stderr.flush()
+# Old manual JSON-RPC handling, SSE, and stdio mode can be removed or significantly refactored
+# if FastMCP handles these transports. For now, focusing on HTTP mode via FastMCP.
+# The run_stdio_mode() might be replaced by conport_mcp.run(transport="stdio") if needed.
 sys.stderr.write(f"MAIN.PY: Value of __name__ is: '{__name__}'\\n"); sys.stderr.flush() # Simplified prefix
 
-if __name__ == "__main__":
-    sys.stderr.write("MAIN.PY: Inside __main__ block.\\n"); sys.stderr.flush() # Simplified prefix
-    
-    # Restoring full argparse
-    # sys.stderr.write(f"MINIMAL MAIN.PY: sys.argv is: {sys.argv}\\n"); sys.stderr.flush() # Too verbose for manual run
-    parser = argparse.ArgumentParser(description="Context Portal MCP Server")
-    # sys.stderr.write("MINIMAL MAIN.PY: After ArgumentParser, before add_argument calls.\\n"); sys.stderr.flush()
+def main_logic(sys_args=None):
+    """
+    Configures and runs the ConPort server (HTTP mode via Uvicorn).
+    The actual MCP logic is handled by the FastMCP instance mounted on the FastAPI app.
+    """
+    parser = argparse.ArgumentParser(description="ConPort MCP Server (FastMCP/HTTP)")
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host to bind the HTTP server to (default: 127.0.0.1)"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind the HTTP server to (default: 8000)"
+    )
+    # --workspace_id is not directly used by uvicorn.run for the app itself,
+    # but it's good for the CLI to accept it for consistency if an IDE launches it.
+    # The actual workspace_id is handled per-request by FastMCP tools.
+    parser.add_argument(
+        "--workspace_id",
+        type=str,
+        required=False, # No longer strictly required for server startup itself
+        help="Optional: Default workspace ID (primarily for IDE launch context, tool calls still need it)."
+    )
+    # The --mode argument might be deprecated if FastMCP only runs HTTP this way,
+    # or we add a condition here to call conport_mcp.run(transport="stdio")
     parser.add_argument(
         "--mode",
-        choices=["stdio"], # Removed "http"
-        default="stdio",
-        help="Server communication mode (default: stdio)"
+        choices=["http", "stdio"], # Add http, stdio might be handled by FastMCP directly
+        default="http",
+        help="Server communication mode (default: http for FastMCP mounted app)"
     )
-    # --host and --port arguments are removed as HTTP mode is disabled
-    # sys.stderr.write("MINIMAL MAIN.PY: After add_argument calls, before parse_args.\\n"); sys.stderr.flush()
-    args = parser.parse_args()
-    sys.stderr.write(f"MAIN.PY: Parsed args: mode={args.mode}\\n"); sys.stderr.flush() # Simplified prefix
 
-    # Mode dispatch logic
-    if args.mode == "stdio":
-        sys.stderr.write("MAIN.PY: Mode is stdio. Calling run_stdio_mode().\\n"); sys.stderr.flush()
-        run_stdio_mode()
-    # Removed http mode handling
-    # else: # This case should not be reached if choices are restricted
-    #     log.error(f"Invalid mode: {args.mode}. Exiting.")
-    #     sys.stderr.write(f"MAIN.PY: Invalid mode '{args.mode}'. Exiting.\\n"); sys.stderr.flush()
-    #     sys.exit(1) # Exit if mode is somehow invalid despite choices
-else: # This else is for if __name__ != "__main__"
-    sys.stderr.write(f"MAIN.PY: __name__ is '{__name__}', not '__main__'. Server startup logic in __main__ block will be skipped.\\n"); sys.stderr.flush()
+    args = parser.parse_args(args=sys_args)
+    log.info(f"Parsed CLI args: {args}")
+
+    if args.mode == "http":
+        log.info(f"Starting ConPort HTTP server (via FastMCP) on {args.host}:{args.port}")
+        # The FastAPI `app` (with FastMCP mounted) is run by Uvicorn
+        uvicorn.run(app, host=args.host, port=args.port)
+    elif args.mode == "stdio":
+        log.info(f"Starting ConPort in STDIO mode using FastMCP for initial CLI arg workspace_id: {args.workspace_id}")
+        sys.stderr.write("MAIN.PY: Entered STDIO mode block.\\n"); sys.stderr.flush()
+        
+        effective_workspace_id = args.workspace_id
+        if args.workspace_id == "${workspaceFolder}":
+            import os
+            current_cwd = os.getcwd()
+            warning_msg = (
+                f"MAIN.PY: WARNING - Workspace ID was literally '${{workspaceFolder}}'. "
+                f"This variable was not expanded by the client IDE. "
+                f"Falling back to current working directory as workspace_id: {current_cwd}. "
+                f"Ensure CWD in MCP config ('{current_cwd}') is the correct project workspace."
+            )
+            log.warning(warning_msg)
+            sys.stderr.write(warning_msg + "\\n"); sys.stderr.flush()
+            effective_workspace_id = current_cwd
+        
+        sys.stderr.write(f"MAIN.PY: STDIO mode - Effective workspace_id for DB validation: {effective_workspace_id}\\n"); sys.stderr.flush()
+        sys.stderr.write("MAIN.PY: STDIO mode - Before DB path validation.\\n"); sys.stderr.flush()
+        try:
+            from src.context_portal_mcp.core.config import get_database_path # Ensure it's imported
+            get_database_path(effective_workspace_id) # Validate path early
+            log.info(f"Workspace ID {effective_workspace_id} path validated for DB for STDIO mode.")
+            sys.stderr.write("MAIN.PY: STDIO mode - DB path validated successfully.\\n"); sys.stderr.flush()
+        except Exception as e:
+            log.error(f"Invalid effective_workspace_id '{effective_workspace_id}' for database in STDIO mode: {e}")
+            sys.stderr.write(f"MAIN.PY: STDIO mode - DB path validation FAILED for '{effective_workspace_id}': {e}\\n"); sys.stderr.flush()
+            sys.exit(1)
+        
+        # Note: The `FastMCP.run()` method is synchronous and will block until the server stops.
+        # It requires the `mcp[cli]` extra to be installed for `mcp.server.stdio.run_server_stdio`.
+        sys.stderr.write("MAIN.PY: STDIO mode - Before conport_mcp.run(transport='stdio').\\n"); sys.stderr.flush()
+        try:
+            # The `settings` attribute on FastMCP can be used to pass runtime config.
+            # However, `workspace_id` is not a standard FastMCP setting for `run()`.
+            # It's expected to be part of the tool call parameters.
+            # The primary role of --workspace_id for stdio here is for the IDE's launch config.
+            conport_mcp.run(transport="stdio")
+            sys.stderr.write("MAIN.PY: STDIO mode - conport_mcp.run(transport='stdio') EXITED WITHOUT ERROR (UNEXPECTED if blocking).\\n"); sys.stderr.flush()
+        except Exception as e:
+            log.exception("Error running FastMCP in STDIO mode")
+            sys.stderr.write(f"MAIN.PY: STDIO mode - conport_mcp.run(transport='stdio') FAILED: {e}\\n"); sys.stderr.flush()
+            sys.exit(1)
+
+    else:
+        log.error(f"Unsupported mode: {args.mode}")
+        sys.exit(1)
+
+def cli_entry_point():
+    """Entry point for the 'conport-server' command-line script."""
+    log.info("ConPort MCP Server CLI entry point called.")
+    main_logic()
+
+if __name__ == "__main__":
+    cli_entry_point()
+# else: No specific action needed if imported, FastMCP instance is available.
 # Add definition for run_stdio_mode if it was stripped in "minimal" version
 # For safety, let's ensure it's defined before it's potentially called.
 # It should be defined before the `if __name__ == "__main__":` block.

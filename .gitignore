@@ -10,6 +10,7 @@ backup/
 mcp-reference/
 .rooignore
 projectBrief.md
+*.log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

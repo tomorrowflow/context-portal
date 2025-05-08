@@ -4,7 +4,7 @@ A database-backed Model Context Protocol (MCP) server for managing structured pr
 
 ## Overview
 
-This project is the **Context Portal MCP server (ConPort)**. ConPort provides a robust and structured way for AI assistants to store, retrieve, and manage various types of project context (e.g., product goals, active tasks, decisions, progress, architectural patterns, custom data) via a dedicated MCP server.
+This project is the **Context Portal MCP server (ConPort)**. ConPort provides a robu nst and structured way for AI assistants to store, retrieve, and manage various types of project context (e.g., product goals, active tasks, decisions, progress, architectural patterns, custom data) via a dedicated MCP server.
 
 It can replace older file-based context management systems by offering a more reliable and queryable database backend (SQLite per workspace). ConPort is designed to be a generic context backend, compatible with various IDEs and client interfaces that support MCP.
 
@@ -15,21 +15,60 @@ Key features include:
 *   Multi-workspace support via `workspace_id`.
 *   Deployment mode: Stdio.
 
-## Setup & Installation
+## Prerequisites
 
-It is recommended to use `uv` for Python environment and package management.
+Before you begin, ensure you have the following installed:
 
-1.  **Create and activate a virtual environment (if you haven't already):**
+*   **Git:** For cloning the repository.
+*   **Python:** Version 3.8 or higher is recommended.
+*   **uv:** (Recommended) For Python environment and package management. You can find installation instructions for `uv` [here](https://github.com/astral-sh/uv). If you prefer not to use `uv`, you can use standard Python `venv` and `pip`.
+
+## Installation from Git Repository
+
+These instructions guide you through setting up ConPort by cloning its Git repository.
+
+1.  **Clone the Repository:**
+    Open your terminal or command prompt and run the following command, replacing `your-username/context-portal.git` with the actual repository URL if it's different (e.g., if you've forked it).
     ```bash
-    uv venv
-    source .venv/bin/activate  # Linux/macOS
-    .venv\Scripts\activate  # Windows
+    git clone https://github.com/context-portal/context-portal.git # Adjust URL if necessary
+    cd context-portal
     ```
 
-2.  **Install dependencies:**
+2.  **Create and Activate a Virtual Environment:**
+    It's highly recommended to use a virtual environment to manage project dependencies.
+    *   **Using `uv` (recommended):**
+        ```bash
+        uv venv
+        source .venv/bin/activate  # Linux/macOS
+        # For Windows Command Prompt: .venv\Scripts\activate.bat
+        # For Windows PowerShell: .venv\Scripts\Activate.ps1
+        ```
+    *   **Using standard `venv`:**
+        ```bash
+        python3 -m venv .venv  # Or python -m venv .venv
+        source .venv/bin/activate  # Linux/macOS
+        # For Windows Command Prompt: .venv\Scripts\activate.bat
+        # For Windows PowerShell: .venv\Scripts\Activate.ps1
+        ```
+
+3.  **Install Dependencies:**
+    *   **Using `uv` (recommended):**
+        ```bash
+        uv pip install -r requirements.txt
+        ```
+    *   **Using standard `pip` (if you used `venv`):**
+        ```bash
+        pip install -r requirements.txt
+        ```
+
+4.  **Verify Installation (Optional):**
+    You can check if the main script is accessible and prints help information:
     ```bash
-    uv pip install -r requirements.txt
+    uv run python src/context_portal_mcp/main.py --help
+    # Or, if not using uv and your .venv is activated:
+    # python src/context_portal_mcp/main.py --help
     ```
+    This command should output the command-line help for the ConPort server.
 
 ## Running the ConPort Server
 
@@ -50,8 +89,9 @@ This mode is ideal for tight integration with an IDE (like Roo Code), where the 
 
 MCP clients (like IDE extensions or other tools) need to be configured to connect to a running ConPort instance.
 
-### For STDIO Mode (e.g., in Roo Code's `.vscode/mcp.json` or global settings)
+### For STDIO Mode (e.g., in a workspace `.vscode/mcp.json` or the IDE's user-level MCP settings)
 
+**Note:** Whether you configure ConPort in a workspace-specific file or your IDE's user-level (global) MCP settings, the `command`, `args` (specifically the path to `main.py`), and `cwd` parameters in the configuration below MUST always point to the location where YOU cloned the `context-portal` repository.
 This tells the IDE how to launch the ConPort server for the current workspace.
 
 ```json
@@ -77,8 +117,10 @@ This tells the IDE how to launch the ConPort server for the current workspace.
   }
 }
 ```
-*   **Important:** Replace `/path/to/your/context-portal-mcp-repo` with the actual absolute path to where you have cloned *this* ConPort server project.
-*   `${workspaceFolder}` is a common IDE variable representing the root of the project the user currently has open (for which ConPort will manage context).
+*   **Important:**
+    *   Replace `/path/to/your/context-portal-mcp-repo` in both the `args` (for `main.py`) and the `cwd` parameter with the **absolute path** to the directory where you cloned this `context-portal` repository.
+    *   For example, if you cloned it into `/home/user/projects/context-portal`, then the `main.py` path would be `/home/user/projects/context-portal/src/context_portal_mcp/main.py` and `cwd` would be `/home/user/projects/context-portal`.
+*   `${workspaceFolder}` is a common IDE variable (like in VS Code or Roo Code) that represents the absolute path to the root of the project workspace the user currently has open. ConPort will manage context for *this* workspace.
 
 ## Usage with LLM Agents (via `conport_memory_strategy.yml`)
 
