@@ -20,38 +20,71 @@ Key features include:
 Before you begin, ensure you have the following installed:
 
 *   **Git:** For cloning the repository.
+    *   [Download and Install Git](https://git-scm.com/downloads)
 *   **Python:** Version 3.8 or higher is recommended.
-*   **uv:** (Recommended) For Python environment and package management. You can find installation instructions for `uv` [here](https://github.com/astral-sh/uv). If you prefer not to use `uv`, you can use standard Python `venv` and `pip`.
+    *   [Download Python](https://www.python.org/downloads/)
+    *   Ensure Python is added to your system's PATH during installation (especially on Windows).
+*   **uv:** (Recommended) A fast Python environment and package manager. Using `uv` simplifies virtual environment creation and dependency installation.
+    *   [Install uv](https://github.com/astral-sh/uv#installation)
+    *   If you prefer not to use `uv`, you can use standard Python `venv` and `pip`.
 
 ## Installation from Git Repository
 
-These instructions guide you through setting up ConPort by cloning its Git repository.
+These instructions guide you through setting up ConPort by cloning its Git repository and installing dependencies. It's highly recommended to use a virtual environment to manage project dependencies and avoid conflicts with system Python packages.
 
 1.  **Clone the Repository:**
-    Open your terminal or command prompt and run the following command, replacing `your-username/context-portal.git` with the actual repository URL if it's different (e.g., if you've forked it).
+    Open your terminal or command prompt and run the following command, replacing `context-portal.git` with the actual repository URL if necessary (e.g., if you've forked it).
     ```bash
-    git clone https://github.com/context-portal/context-portal.git # Adjust URL if necessary
+    git clone https://github.com/context-portal/context-portal.git
     cd context-portal
     ```
 
 2.  **Create and Activate a Virtual Environment:**
-    It's highly recommended to use a virtual environment to manage project dependencies.
+
+    Using a virtual environment isolates the project's Python dependencies from your system's Python installation.
+
     *   **Using `uv` (recommended):**
+
         ```bash
         uv venv
-        source .venv/bin/activate  # Linux/macOS
-        # For Windows Command Prompt: .venv\Scripts\activate.bat
-        # For Windows PowerShell: .venv\Scripts\Activate.ps1
         ```
+        *   **Activate the environment:**
+            *   **Linux/macOS:**
+                ```bash
+                source .venv/bin/activate
+                ```
+            *   **Windows Command Prompt:**
+                ```cmd
+                .venv\Scripts\activate.bat
+                ```
+            *   **Windows PowerShell:**
+                ```powershell
+                .venv\Scripts\Activate.ps1
+                ```
+
     *   **Using standard `venv`:**
+
         ```bash
-        python3 -m venv .venv  # Or python -m venv .venv
-        source .venv/bin/activate  # Linux/macOS
-        # For Windows Command Prompt: .venv\Scripts\activate.bat
-        # For Windows PowerShell: .venv\Scripts\Activate.ps1
+        python3 -m venv .venv  # On some systems, use 'python -m venv .venv'
         ```
+        *   **Activate the environment:**
+            *   **Linux/macOS:**
+                ```bash
+                source .venv/bin/activate
+                ```
+            *   **Windows Command Prompt:**
+                ```cmd
+                .venv\Scripts\activate.bat
+                ```
+            *   **Windows PowerShell:**
+                ```powershell
+                .venv\Scripts\Activate.ps1
+                ```
 
 3.  **Install Dependencies:**
+
+    With your virtual environment activated, install the project dependencies listed in `requirements.txt`.
+
     *   **Using `uv` (recommended):**
         ```bash
         uv pip install -r requirements.txt
@@ -62,28 +95,37 @@ These instructions guide you through setting up ConPort by cloning its Git repos
         ```
 
 4.  **Verify Installation (Optional):**
-    You can check if the main script is accessible and prints help information:
-    ```bash
-    uv run python src/context_portal_mcp/main.py --help
-    # Or, if not using uv and your .venv is activated:
-    # python src/context_portal_mcp/main.py --help
-    ```
+
+    You can check if the main script is accessible and prints help information. Ensure your virtual environment is activated.
+
+    *   **If you used `uv`:**
+        ```bash
+        uv run python src/context_portal_mcp/main.py --help
+        ```
+    *   **If you used standard `venv`:**
+        ```bash
+        python src/context_portal_mcp/main.py --help
+        ```
     This command should output the command-line help for the ConPort server.
 
 ## Running the ConPort Server
 
-The ConPort server is run in STDIO mode.
+The ConPort server is primarily designed to be run in STDIO mode for IDE integration.
 
 ### STDIO Mode (Recommended for IDE Integration)
 
-This mode is ideal for tight integration with an IDE (like Roo Code), where the IDE spawns and manages the server process for the current workspace.
+This mode is ideal for tight integration with an IDE (like VS Code or Roo Code), where the IDE spawns and manages the server process for the current workspace.
 
-*   **Command:**
+*   **Command Structure:**
+
     ```bash
-    uv run python src/context_portal_mcp/main.py --mode stdio --workspace_id "/actual/path/to/your/project_workspace"
+    <python_runner> src/context_portal_mcp/main.py --mode stdio --workspace_id "/actual/path/to/your/project_workspace"
     ```
-*   Replace `"/actual/path/to/your/project_workspace"` with the absolute path to the workspace whose context you want ConPort to manage. The IDE typically provides this path dynamically (e.g., via a variable like `${workspaceFolder}`).
-*   ConPort will create/use a database file at `your_project_workspace/.context_portal/data.sqlite`.
+    *   Replace `<python_runner>` with:
+        *   `uv run python` if you installed dependencies using `uv`.
+        *   `python` if you installed dependencies using standard `venv` and `pip` (ensure your virtual environment is activated).
+    *   Replace `"/actual/path/to/your/project_workspace"` with the absolute path to the root of the workspace whose context you want ConPort to manage. The IDE typically provides this path dynamically (e.g., via a variable like `${workspaceFolder}`).
+    *   ConPort will create/use a database file at `your_project_workspace/.context_portal/data.sqlite`.
 
 ## Client Configuration
 
