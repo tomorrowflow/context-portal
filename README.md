@@ -89,6 +89,7 @@ These instructions guide you through setting up ConPort by cloning its Git repos
         ```bash
         uv pip install -r requirements.txt
         ```
+        *   **Note:** When using `uv`, activating the virtual environment (`source .venv/bin/activate` etc.) is not strictly necessary before running `uv pip install` if you are in the directory where the `.venv` was created. `uv` will automatically detect and use it. However, activation *is* required if you plan to run the server script directly using `python src/context_portal_mcp/main.py` instead of `uv run python ...`.
     *   **Using standard `pip` (if you used `venv`):**
         ```bash
         pip install -r requirements.txt
