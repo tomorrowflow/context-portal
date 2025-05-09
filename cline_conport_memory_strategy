@@ -7,22 +7,28 @@ conport_memory_strategy:
   initialization: |
     <thinking>
     - **CONPORT INITIALIZATION AND CONTEXT LOADING:**
-    - First, I need to ensure I have the `workspace_id`. I will check if it's available (e.g., as `${workspaceFolder}`). If not, I MUST ask the user for the absolute path to the current workspace.
-    - Once `workspace_id` is confirmed, I will attempt to connect to the `conport` server (referred to as ConPort) and load initial context.
-    - I will call the 'get_*' tools sequentially. If any critical 'get_*' tool call fails (e.g., server not found, or a specific error indicating the workspace is not initialized in ConPort), I will set status to [CONPORT_MEMORY: INACTIVE] and inform the user.
-    - Otherwise, upon successful loading of initial contexts, I will set status to [CONPORT_MEMORY: ACTIVE].
-    - Tool usage descriptions below are illustrative; the agent must construct actual `use_mcp_tool` calls with the correct XML structure and the determined `ACTUAL_WORKSPACE_ID`.
+    - First, I need to ensure I have the `workspace_id`. I will check if it's available (e.g., as `${workspaceFolder}`). If not, I MUST ask the user for the absolute path to the current project workspace.
+    - Then, I will attempt to connect to the `conport` server and load initial context using the 'get_*' tools.
+    - I will check if the loaded context appears empty or minimal.
     </thinking>
     # Agent Action Plan:
     # 1. Determine `ACTUAL_WORKSPACE_ID`.
-    # 2. Invoke ConPort tool `get_product_context` using `use_mcp_tool` with server `conport` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID"}`. Internalize the retrieved data for contextual understanding. Briefly confirm successful loading (e.g., 'Product context loaded.') and proceed to the next step. Do not echo the full raw data to the user unless specifically requested.
-    # 3. Invoke ConPort tool `get_active_context` using `use_mcp_tool` with server `conport` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID"}`. Internalize the retrieved data for contextual understanding. Briefly confirm successful loading and proceed. Do not echo full raw data.
-    # 4. Invoke ConPort tool `get_decisions` using `use_mcp_tool` with server `conport` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "limit": 5}`. Internalize the retrieved data. Briefly confirm successful loading and proceed. Do not echo full raw data.
-    # 5. Invoke ConPort tool `get_progress` using `use_mcp_tool` with server `conport` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "limit": 5}`. Internalize the retrieved data. Briefly confirm successful loading and proceed. Do not echo full raw data.
-    # 6. Invoke ConPort tool `get_system_patterns` using `use_mcp_tool` with server `conport` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID"}`. Internalize the retrieved data. Briefly confirm successful loading and proceed. Do not echo full raw data.
-    # 7. Invoke ConPort tool `get_custom_data` using `use_mcp_tool` with server `conport` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "category": "critical_settings"}`. Internalize the retrieved data. Briefly confirm successful loading and proceed. Do not echo full raw data.
-    # 8. Invoke ConPort tool `get_custom_data` using `use_mcp_tool` with server `conport` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "category": "ProjectGlossary"}`. Internalize all retrieved glossary terms and definitions. Briefly confirm successful loading and proceed. Do not echo full raw data.
-    # 9. If all initial `get_*` calls are successful and return expected data structures (even if empty), set internal status to [CONPORT_MEMORY: ACTIVE] and inform user: "ConPort memory initialized and all contexts loaded. How can I assist you?" (The agent should then use the ask_followup_question tool).
+    # 2. Attempt to load initial contexts from ConPort:
+    #    Invoke ConPort tool `get_product_context` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID"}`. Store result.
+    #    Invoke ConPort tool `get_active_context` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID"}`. Store result.
+    #    Invoke ConPort tool `get_decisions` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "limit": 1}`. Store result. (Check for *any* decisions to see if it's empty)
+    #    Invoke ConPort tool `get_progress` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "limit": 1}`. Store result. (Check for *any* progress)
+    #    Invoke ConPort tool `get_system_patterns` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "limit": 1}`. Store result. (Check for *any* patterns)
+    #    Invoke ConPort tool `get_custom_data` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "category": "critical_settings"}`. Store result. (Check for *any* custom data)
+    #    Invoke ConPort tool `get_custom_data` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "category": "ProjectGlossary"}`. Store result. (Check for *any* glossary terms)
+    # 3. Analyze loaded context emptiness:
+    #    Check if results from step 3 indicate an empty database (e.g., get_* calls returned empty lists or dictionaries).
+    # 4. Standard Initialization Completion:
+    #    If the the loaded context is NOT empty/minimal:
+    #        Set internal status to [CONPORT_MEMORY: ACTIVE].
+    #        Inform user: "ConPort memory initialized and all contexts loaded. The agent should then use the ask_followup_question tool.
+    # 5. Handle Initialization Failure:
+    #    If any initial `get_*` calls in step 3 failed unexpectedly (e.g., server not found, tool error not related to empty data), fall back to the `if_conport_unavailable_or_init_failed` logic.
 
   if_conport_unavailable_or_init_failed: |
     <thinking>
@@ -140,7 +146,3 @@ conport_memory_strategy:
     post_umb_actions:
       - "Inform user: ConPort has been synchronized with information from the current session."
       - "Resume previous task or await new instructions."
-    # These overrides might not be strictly necessary if all memory operations are via ConPort tools,
-    # but keeping them doesn't hurt if UMB needs to, for example, list files to identify a new custom context category.
-    override_file_restrictions: true
-    override_mode_restrictions: true

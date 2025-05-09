@@ -506,6 +506,13 @@ def main_logic(sys_args=None):
             sys.stderr.write(warning_msg + "\\n"); sys.stderr.flush()
             effective_workspace_id = current_cwd
         
+        # The following lines are now part of the 'else' to the 'if args.workspace_id == "${workspaceFolder}":'
+        # or will only be reached if workspace_id is not the literal string.
+        # However, if workspace_id is None or empty after parsing, argparse should handle it if 'required=True'.
+        # If it's not required and still None/empty, we might need another check here.
+        # For now, assuming args.workspace_id will be a valid path if not "${workspaceFolder}".
+        # The 'effective_workspace_id' will be args.workspace_id if it's not the literal string.
+        
         sys.stderr.write(f"MAIN.PY: STDIO mode - Effective workspace_id for DB validation: {effective_workspace_id}\\n"); sys.stderr.flush()
         sys.stderr.write("MAIN.PY: STDIO mode - Before DB path validation.\\n"); sys.stderr.flush()
         try:
