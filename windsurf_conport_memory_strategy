@@ -11,18 +11,11 @@ conport_memory_strategy:
     <thinking>
     - **CONPORT INITIALIZATION AND CONTEXT LOADING:**
     - First, I need to ensure I have the `workspace_id`. I will check if it's available (e.g., as `${workspaceFolder}`). If not, I MUST ask the user for the absolute path to the current project workspace.
-    - Once `workspace_id` is confirmed, I will check for the existence of a `memory-bank/` directory within the workspace using `execute_command`.
     - Then, I will attempt to connect to the `conport` server and load initial context using the 'get_*' tools.
-    - I will check if the loaded context appears empty or minimal.
-    - If a `memory-bank/` directory is found AND the loaded ConPort context is empty/minimal, I will offer the user the option to import the data using `ask_followup_question`.
-    - Otherwise, I will proceed with the loaded context (which might be empty) or handle server unavailability.
     </thinking>
     # Agent Action Plan:
     # 1. Determine `ACTUAL_WORKSPACE_ID`.
-    # 2. Check for memory-bank/ directory using Windsurf's 'Run Command' tool:
-    #    Invoke execute_command with command: `test -d "ACTUAL_WORKSPACE_ID/memory-bank/" && echo "memory_bank_exists"`
-    #    Store the output of this command.
-    # 3. Attempt to load initial contexts from ConPort using Windsurf's 'use_mcp_tool':
+    # 2. Attempt to load initial contexts from ConPort using Windsurf's 'use_mcp_tool':
     #    Invoke use_mcp_tool with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID"}` for 'get_product_context'. Store result.
     #    Invoke use_mcp_tool with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID"}` for 'get_active_context'. Store result.
     #    Invoke use_mcp_tool with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "limit": 1}` for 'get_decisions'. Store result. (Check for *any* decisions to see if it's empty)
@@ -30,20 +23,13 @@ conport_memory_strategy:
     #    Invoke use_mcp_tool with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "limit": 1}` for 'get_system_patterns'. Store result. (Check for *any* patterns)
     #    Invoke use_mcp_tool with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "category": "critical_settings"}` for 'get_custom_data'. Store result. (Check for *any* custom data)
     #    Invoke use_mcp_tool with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "category": "ProjectGlossary"}` for 'get_custom_data'. Store result. (Check for *any* glossary terms)
-    # 4. Analyze loaded context emptiness:
+    # 3. Analyze loaded context emptiness:
     #    Check if results from step 3 indicate an empty database (e.g., get_* calls returned empty lists or dictionaries).
-    # 5. Conditional Import Offer:
-    #    If the output from step 2 contains "memory_bank_exists" AND the loaded context is empty/minimal (from step 4):
-    #        Use Windsurf's 'ask_followup_question' tool to ask: "I found a 'memory-bank/' directory in this workspace, and the ConPort database appears empty. Would you like to import the data from 'memory-bank/' into ConPort?"
-    #        Suggested answers:
-    #        - "Yes, import from memory-bank/"
-    #        - "No, start with an empty ConPort database."
-    #        STOP the initialization plan here and wait for the user's response. The next step will depend on their answer.
-    # 6. Standard Initialization Completion:
-    #    If the output from step 2 does NOT contain "memory_bank_exists" OR the loaded context is NOT empty/minimal:
+    # 4. Standard Initialization Completion:
+    #    If the loaded context is NOT empty/minimal:
     #        Set internal status to [CONPORT_MEMORY: ACTIVE].
-    #        Inform user: "ConPort memory initialized and all contexts loaded. How can I assist you?" (The agent should then use the ask_followup_question tool).
-    # 7. Handle Initialization Failure:
+    #        Inform user: "ConPort memory initialized and all contexts loaded. The agent should then use the ask_followup_question tool.
+    # 5. Handle Initialization Failure:
     #    If any initial `get_*` calls in step 3 failed unexpectedly (e.g., server not found, tool error not related to empty data), fall back to the `if_conport_unavailable_or_init_failed` logic.
 
   if_conport_unavailable_or_init_failed: |
