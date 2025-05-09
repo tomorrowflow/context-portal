@@ -141,9 +141,9 @@ This tells the IDE how to launch the ConPort server for the current workspace.
 {
   "mcpServers": {
     "conport-stdio": {
-      "command": "/home/scottymac/.local/share/Roo-Code/MCP/context-portal/.venv/bin/python",
+      "command": "/path/to/your/context-portal/.venv/bin/python",
       "args": [
-        "/home/scottymac/.local/share/Roo-Code/MCP/context-portal/src/context_portal_mcp/main.py",
+        "/path/to/your/context-portal/src/context_portal_mcp/main.py",
         "--mode",
         "stdio",
         "--workspace_id",
