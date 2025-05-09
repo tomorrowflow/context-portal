@@ -11,6 +11,8 @@ mcp-reference/
 .rooignore
 projectBrief.md
 *.log
+conport_export/
+code-complexity-server/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -87,11 +87,19 @@ async def tool_update_product_context(raw_args_from_fastmcp: Dict[str, Any], ctx
     sys.stderr.write(f"MAIN.PY: tool_update_product_context received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
-        content_val = raw_args_from_fastmcp.get("content")
-        if workspace_id_val is None or content_val is None: # Check for both required fields
-            log.error(f"CRITICAL: Missing 'workspace_id' or 'content' in raw_args_from_fastmcp for update_product_context. Received: {raw_args_from_fastmcp}")
-            raise ValueError("Missing 'workspace_id' or 'content' in arguments for update_product_context")
-        pydantic_args = models.UpdateContextArgs(workspace_id=workspace_id_val, content=content_val)
+        content_val = raw_args_from_fastmcp.get("content") # This can now be None
+        patch_content_val = raw_args_from_fastmcp.get("patch_content") # New optional field
+
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: Missing 'workspace_id' in raw_args_from_fastmcp for update_product_context. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for update_product_context")
+        
+        # Pydantic model UpdateContextArgs will validate that either content or patch_content is provided
+        pydantic_args = models.UpdateContextArgs(
+            workspace_id=workspace_id_val,
+            content=content_val,
+            patch_content=patch_content_val
+        )
         return mcp_handlers.handle_update_product_context(pydantic_args)
     except exceptions.ContextPortalError as e:
         log.error(f"Error in update_product_context handler: {e}")
@@ -122,11 +130,19 @@ async def tool_update_active_context(raw_args_from_fastmcp: Dict[str, Any], ctx:
     sys.stderr.write(f"MAIN.PY: tool_update_active_context received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
-        content_val = raw_args_from_fastmcp.get("content")
-        if workspace_id_val is None or content_val is None:
-            log.error(f"CRITICAL: Missing 'workspace_id' or 'content' in raw_args_from_fastmcp for update_active_context. Received: {raw_args_from_fastmcp}")
-            raise ValueError("Missing 'workspace_id' or 'content' in arguments for update_active_context")
-        pydantic_args = models.UpdateContextArgs(workspace_id=workspace_id_val, content=content_val)
+        content_val = raw_args_from_fastmcp.get("content") # This can now be None
+        patch_content_val = raw_args_from_fastmcp.get("patch_content") # New optional field
+
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: Missing 'workspace_id' in raw_args_from_fastmcp for update_active_context. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for update_active_context")
+
+        # Pydantic model UpdateContextArgs will validate that either content or patch_content is provided
+        pydantic_args = models.UpdateContextArgs(
+            workspace_id=workspace_id_val,
+            content=content_val,
+            patch_content=patch_content_val
+        )
         return mcp_handlers.handle_update_active_context(pydantic_args)
     except exceptions.ContextPortalError as e:
         log.error(f"Error in update_active_context handler: {e}")
@@ -149,7 +165,8 @@ async def tool_log_decision(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPConte
             workspace_id=workspace_id_val,
             summary=summary_val,
             rationale=raw_args_from_fastmcp.get("rationale"), # Optional
-            implementation_details=raw_args_from_fastmcp.get("implementation_details") # Optional
+            implementation_details=raw_args_from_fastmcp.get("implementation_details"), # Optional
+            tags=raw_args_from_fastmcp.get("tags") # Optional
         )
         
         return mcp_handlers.handle_log_decision(pydantic_args) # Pass Pydantic model
@@ -172,7 +189,9 @@ async def tool_get_decisions(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPCont
             raise ValueError("Missing 'workspace_id' in arguments for get_decisions")
         pydantic_args = models.GetDecisionsArgs(
             workspace_id=workspace_id_val,
-            limit=raw_args_from_fastmcp.get("limit") # Optional
+            limit=raw_args_from_fastmcp.get("limit"), # Optional
+            tags_filter_include_all=raw_args_from_fastmcp.get("tags_filter_include_all"), # Optional
+            tags_filter_include_any=raw_args_from_fastmcp.get("tags_filter_include_any")  # Optional
         )
         return mcp_handlers.handle_get_decisions(pydantic_args)
     except exceptions.ContextPortalError as e:
@@ -218,7 +237,10 @@ async def tool_log_progress(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPConte
             workspace_id=workspace_id_val,
             status=status_val,
             description=description_val,
-            parent_id=raw_args_from_fastmcp.get("parent_id") # Optional
+            parent_id=raw_args_from_fastmcp.get("parent_id"), # Optional
+            linked_item_type=raw_args_from_fastmcp.get("linked_item_type"), # Optional
+            linked_item_id=raw_args_from_fastmcp.get("linked_item_id"), # Optional
+            link_relationship_type=raw_args_from_fastmcp.get("link_relationship_type", "relates_to_progress") # Optional with default
         )
         return mcp_handlers.handle_log_progress(pydantic_args)
     except exceptions.ContextPortalError as e:
@@ -262,7 +284,8 @@ async def tool_log_system_pattern(raw_args_from_fastmcp: Dict[str, Any], ctx: MC
         pydantic_args = models.LogSystemPatternArgs(
             workspace_id=workspace_id_val,
             name=name_val,
-            description=raw_args_from_fastmcp.get("description") # Optional
+            description=raw_args_from_fastmcp.get("description"), # Optional
+            tags=raw_args_from_fastmcp.get("tags") # Optional
         )
         return mcp_handlers.handle_log_system_pattern(pydantic_args)
     except exceptions.ContextPortalError as e:
@@ -280,7 +303,11 @@ async def tool_get_system_patterns(raw_args_from_fastmcp: Dict[str, Any], ctx: M
         if workspace_id_val is None:
             log.error(f"CRITICAL: 'workspace_id' not found for get_system_patterns. Received: {raw_args_from_fastmcp}")
             raise ValueError("Missing 'workspace_id' in arguments for get_system_patterns")
-        pydantic_args = models.GetSystemPatternsArgs(workspace_id=workspace_id_val)
+        pydantic_args = models.GetSystemPatternsArgs(
+            workspace_id=workspace_id_val,
+            tags_filter_include_all=raw_args_from_fastmcp.get("tags_filter_include_all"), # Optional
+            tags_filter_include_any=raw_args_from_fastmcp.get("tags_filter_include_any")  # Optional
+        )
         return mcp_handlers.handle_get_system_patterns(pydantic_args)
     except exceptions.ContextPortalError as e:
         log.error(f"Error in get_system_patterns handler: {e}")
@@ -418,6 +445,173 @@ async def tool_import_markdown_to_conport(raw_args_from_fastmcp: Dict[str, Any],
     except Exception as e:
         log.error(f"Error processing args for import_markdown_to_conport: {e}. Received raw: {raw_args_from_fastmcp}")
         raise exceptions.ContextPortalError(f"Server error processing import_markdown_to_conport: {type(e).__name__}")
+
+@conport_mcp.tool(name="link_conport_items")
+async def tool_link_conport_items(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_link_conport_items received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        # Extract all fields for LinkConportItemsArgs
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        source_item_type_val = raw_args_from_fastmcp.get("source_item_type")
+        source_item_id_val = raw_args_from_fastmcp.get("source_item_id")
+        target_item_type_val = raw_args_from_fastmcp.get("target_item_type")
+        target_item_id_val = raw_args_from_fastmcp.get("target_item_id")
+        relationship_type_val = raw_args_from_fastmcp.get("relationship_type")
+
+        if not all([workspace_id_val, source_item_type_val, source_item_id_val,
+                    target_item_type_val, target_item_id_val, relationship_type_val]):
+            log.error(f"CRITICAL: Missing required fields for link_conport_items. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing required fields in arguments for link_conport_items")
+
+        pydantic_args = models.LinkConportItemsArgs(
+            workspace_id=workspace_id_val,
+            source_item_type=source_item_type_val,
+            source_item_id=str(source_item_id_val), # Ensure string
+            target_item_type=target_item_type_val,
+            target_item_id=str(target_item_id_val), # Ensure string
+            relationship_type=relationship_type_val,
+            description=raw_args_from_fastmcp.get("description") # Optional
+        )
+        return mcp_handlers.handle_link_conport_items(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in link_conport_items handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for link_conport_items: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing link_conport_items: {type(e).__name__}")
+
+@conport_mcp.tool(name="get_linked_items")
+async def tool_get_linked_items(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
+    sys.stderr.write(f"MAIN.PY: tool_get_linked_items received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        item_type_val = raw_args_from_fastmcp.get("item_type")
+        item_id_val = raw_args_from_fastmcp.get("item_id")
+
+        if not all([workspace_id_val, item_type_val, item_id_val]):
+            log.error(f"CRITICAL: Missing required fields for get_linked_items. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id', 'item_type', or 'item_id' in arguments for get_linked_items")
+
+        pydantic_args = models.GetLinkedItemsArgs(
+            workspace_id=workspace_id_val,
+            item_type=item_type_val,
+            item_id=str(item_id_val), # Ensure string
+            relationship_type_filter=raw_args_from_fastmcp.get("relationship_type_filter"), # Optional
+            linked_item_type_filter=raw_args_from_fastmcp.get("linked_item_type_filter"), # Optional
+            limit=raw_args_from_fastmcp.get("limit") # Optional
+        )
+        return mcp_handlers.handle_get_linked_items(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_linked_items handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_linked_items: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing get_linked_items: {type(e).__name__}")
+
+@conport_mcp.tool(name="search_custom_data_value_fts")
+async def tool_search_custom_data_value_fts(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
+    sys.stderr.write(f"MAIN.PY: tool_search_custom_data_value_fts received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        query_term_val = raw_args_from_fastmcp.get("query_term")
+
+        if not all([workspace_id_val, query_term_val]):
+            log.error(f"CRITICAL: Missing required fields for search_custom_data_value_fts. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' or 'query_term' in arguments for search_custom_data_value_fts")
+
+        pydantic_args = models.SearchCustomDataValueArgs( # Ensure this model exists and is correct
+            workspace_id=workspace_id_val,
+            query_term=query_term_val,
+            category_filter=raw_args_from_fastmcp.get("category_filter"), # Optional
+            limit=raw_args_from_fastmcp.get("limit") # Optional
+        )
+        return mcp_handlers.handle_search_custom_data_value_fts(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in search_custom_data_value_fts handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for search_custom_data_value_fts: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing search_custom_data_value_fts: {type(e).__name__}")
+
+@conport_mcp.tool(name="batch_log_items")
+async def tool_batch_log_items(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_batch_log_items received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        item_type_val = raw_args_from_fastmcp.get("item_type")
+        items_val = raw_args_from_fastmcp.get("items")
+
+        if not all([workspace_id_val, item_type_val, isinstance(items_val, list)]):
+            log.error(f"CRITICAL: Missing required fields or incorrect type for 'items' in batch_log_items. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id', 'item_type', or 'items' (must be a list) in arguments for batch_log_items")
+
+        pydantic_args = models.BatchLogItemsArgs(
+            workspace_id=workspace_id_val,
+            item_type=item_type_val,
+            items=items_val
+        )
+        return mcp_handlers.handle_batch_log_items(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in batch_log_items handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for batch_log_items: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing batch_log_items: {type(e).__name__}")
+
+@conport_mcp.tool(name="get_item_history")
+async def tool_get_item_history(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
+    sys.stderr.write(f"MAIN.PY: tool_get_item_history received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        item_type_val = raw_args_from_fastmcp.get("item_type")
+
+        if not all([workspace_id_val, item_type_val]):
+            log.error(f"CRITICAL: Missing required fields for get_item_history. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' or 'item_type' in arguments for get_item_history")
+
+        pydantic_args = models.GetItemHistoryArgs(
+            workspace_id=workspace_id_val,
+            item_type=item_type_val,
+            limit=raw_args_from_fastmcp.get("limit"),
+            before_timestamp=raw_args_from_fastmcp.get("before_timestamp"),
+            after_timestamp=raw_args_from_fastmcp.get("after_timestamp"),
+            version=raw_args_from_fastmcp.get("version")
+        )
+        return mcp_handlers.handle_get_item_history(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_item_history handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_item_history: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing get_item_history: {type(e).__name__}")
+
+@conport_mcp.tool(name="delete_decision_by_id")
+async def tool_delete_decision_by_id(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_delete_decision_by_id received raw_args_from_fastmcp: {raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        decision_id_val = raw_args_from_fastmcp.get("decision_id")
+        if not all([workspace_id_val, decision_id_val]):
+            raise ValueError("Missing 'workspace_id' or 'decision_id'")
+        pydantic_args = models.DeleteDecisionByIdArgs(workspace_id=workspace_id_val, decision_id=decision_id_val)
+        return mcp_handlers.handle_delete_decision_by_id(pydantic_args)
+    except Exception as e:
+        log.error(f"Error processing args for delete_decision_by_id: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing delete_decision_by_id: {type(e).__name__}")
+
+@conport_mcp.tool(name="delete_system_pattern_by_id")
+async def tool_delete_system_pattern_by_id(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_delete_system_pattern_by_id received raw_args_from_fastmcp: {raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        pattern_id_val = raw_args_from_fastmcp.get("pattern_id")
+        if not all([workspace_id_val, pattern_id_val]):
+            raise ValueError("Missing 'workspace_id' or 'pattern_id'")
+        pydantic_args = models.DeleteSystemPatternByIdArgs(workspace_id=workspace_id_val, pattern_id=pattern_id_val)
+        return mcp_handlers.handle_delete_system_pattern_by_id(pydantic_args)
+    except Exception as e:
+        log.error(f"Error processing args for delete_system_pattern_by_id: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing delete_system_pattern_by_id: {type(e).__name__}")
 
 # Mount the FastMCP SSE app to the FastAPI app at the /mcp path
 # This will handle GET for SSE and POST for JSON-RPC client requests

@@ -6,6 +6,7 @@ from pathlib import Path
 import json
 import re # For markdown parsing
 from typing import Dict, Any, List, Optional
+from datetime import datetime # Added missing import
 
 from pydantic import ValidationError
 
@@ -39,8 +40,10 @@ def handle_update_product_context(args: models.UpdateContextArgs) -> Dict[str, A
     Returns a success message dictionary.
     """
     try:
-        context_model = models.ProductContext(content=args.content) # content is already a dict
-        db.update_product_context(args.workspace_id, context_model)
+        # The Pydantic model 'args' (UpdateContextArgs) now handles validation
+        # for 'content' vs 'patch_content'.
+        # The database function 'db.update_product_context' now expects UpdateContextArgs.
+        db.update_product_context(args.workspace_id, args)
         # FastMCP expects direct results. A status message is a reasonable result.
         return {"status": "success", "message": "Product context updated successfully."}
     except ValidationError as e: # Should not happen if FastMCP validates schema, but good for direct calls
@@ -61,7 +64,8 @@ def handle_log_decision(args: models.LogDecisionArgs) -> Dict[str, Any]:
         decision_to_log = models.Decision(
             summary=args.summary,
             rationale=args.rationale,
-            implementation_details=args.implementation_details
+            implementation_details=args.implementation_details,
+            tags=args.tags
             # Timestamp is added automatically by the Pydantic model's default_factory
         )
         logged_decision = db.log_decision(args.workspace_id, decision_to_log)
@@ -81,7 +85,12 @@ def handle_get_decisions(args: models.GetDecisionsArgs) -> List[Dict[str, Any]]:
     Returns a list of decision dictionaries.
     """
     try:
-        decisions_list = db.get_decisions(args.workspace_id, limit=args.limit)
+        decisions_list = db.get_decisions(
+            args.workspace_id,
+            limit=args.limit,
+            tags_filter_include_all=args.tags_filter_include_all,
+            tags_filter_include_any=args.tags_filter_include_any
+        )
         return [d.model_dump(mode='json') for d in decisions_list]
     except DatabaseError as e:
         raise ContextPortalError(f"Database error getting decisions: {e}")
@@ -129,8 +138,10 @@ def handle_update_active_context(args: models.UpdateContextArgs) -> Dict[str, An
     Returns a success message dictionary.
     """
     try:
-        context_model = models.ActiveContext(content=args.content)
-        db.update_active_context(args.workspace_id, context_model)
+        # The Pydantic model 'args' (UpdateContextArgs) now handles validation
+        # for 'content' vs 'patch_content'.
+        # The database function 'db.update_active_context' now expects UpdateContextArgs.
+        db.update_active_context(args.workspace_id, args)
         return {"status": "success", "message": "Active context updated successfully."}
     except ValidationError as e: # Should not happen if FastMCP validates
          raise ToolArgumentError(f"Invalid content structure: {e}")
@@ -151,8 +162,28 @@ def handle_log_progress(args: models.LogProgressArgs) -> Dict[str, Any]:
             status=args.status,
             description=args.description,
             parent_id=args.parent_id
+            # linked_item_type and linked_item_id are not part of ProgressEntry model itself
         )
         logged_progress = db.log_progress(args.workspace_id, progress_to_log)
+
+        # If linking information is provided, create the link
+        if args.linked_item_type and args.linked_item_id and logged_progress.id is not None:
+            try:
+                link_to_create = models.ContextLink(
+                    source_item_type="progress_entry", # The progress entry is the source
+                    source_item_id=str(logged_progress.id), # ID of the newly created progress entry
+                    target_item_type=args.linked_item_type,
+                    target_item_id=args.linked_item_id,
+                    relationship_type=args.link_relationship_type, # Use the relationship type from args
+                    description=f"Progress entry '{logged_progress.description[:30]}...' automatically linked."
+                )
+                db.log_context_link(args.workspace_id, link_to_create)
+                log.info(f"Automatically linked progress entry ID {logged_progress.id} to {args.linked_item_type} ID {args.linked_item_id}")
+            except Exception as link_e:
+                # Log the linking error but don't let it fail the whole progress logging
+                log.error(f"Failed to automatically link progress entry ID {logged_progress.id} for workspace {args.workspace_id}: {link_e}")
+                # Optionally, add this error to the response if the MCP tool schema supports it
+
         return logged_progress.model_dump(mode='json')
     except DatabaseError as e:
         raise ContextPortalError(f"Database error logging progress: {e}")
@@ -187,7 +218,7 @@ def handle_log_system_pattern(args: models.LogSystemPatternArgs) -> Dict[str, An
     Returns the logged system pattern as a dictionary.
     """
     try:
-        pattern_to_log = models.SystemPattern(name=args.name, description=args.description)
+        pattern_to_log = models.SystemPattern(name=args.name, description=args.description, tags=args.tags)
         logged_pattern = db.log_system_pattern(args.workspace_id, pattern_to_log)
         return logged_pattern.model_dump(mode='json')
     except DatabaseError as e:
@@ -203,7 +234,11 @@ def handle_get_system_patterns(args: models.GetSystemPatternsArgs) -> List[Dict[
     Returns a list of system pattern dictionaries.
     """
     try:
-        patterns_list = db.get_system_patterns(args.workspace_id)
+        patterns_list = db.get_system_patterns(
+            args.workspace_id,
+            tags_filter_include_all=args.tags_filter_include_all,
+            tags_filter_include_any=args.tags_filter_include_any
+        )
         return [p.model_dump(mode='json') for p in patterns_list]
     except DatabaseError as e:
         raise ContextPortalError(f"Database error getting system patterns: {e}")
@@ -281,6 +316,25 @@ def handle_search_project_glossary_fts(args: models.SearchProjectGlossaryArgs) -
         log.exception(f"Unexpected error in search_project_glossary_fts for workspace {args.workspace_id}")
         raise ContextPortalError(f"Unexpected error in search_project_glossary_fts: {e}")
 
+def handle_search_custom_data_value_fts(args: models.SearchCustomDataValueArgs) -> List[Dict[str, Any]]:
+    """
+    Handles the 'search_custom_data_value_fts' MCP tool.
+    Searches custom data entries using FTS, optionally filtered by category.
+    """
+    try:
+        results = db.search_custom_data_value_fts(
+            args.workspace_id,
+            query_term=args.query_term,
+            category_filter=args.category_filter,
+            limit=args.limit
+        )
+        return [item.model_dump(mode='json') for item in results]
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error searching custom data values: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in search_custom_data_value_fts for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error searching custom data values: {e}")
+
 # --- Export Tool Handler ---
 
 def _format_product_context_md(data: Dict[str, Any]) -> str:
@@ -310,11 +364,25 @@ def _format_active_context_md(data: Dict[str, Any]) -> str:
     
     if data.get("recentChanges"):
         lines.append("## Recent Changes\n")
-        lines.append(data["recentChanges"].strip() + "\n\n")
+        if isinstance(data["recentChanges"], list):
+            for item in data["recentChanges"]:
+                lines.append(f"*   {str(item).strip()}\n")
+            lines.append("\n")
+        elif isinstance(data["recentChanges"], str):
+            lines.append(data["recentChanges"].strip() + "\n\n")
+        else:
+            lines.append(str(data["recentChanges"]) + "\n\n")
 
     if data.get("openQuestionsIssues"):
         lines.append("## Open Questions/Issues\n")
-        lines.append(data["openQuestionsIssues"].strip() + "\n\n")
+        if isinstance(data["openQuestionsIssues"], list):
+            for item in data["openQuestionsIssues"]:
+                lines.append(f"*   {str(item).strip()}\n")
+            lines.append("\n")
+        elif isinstance(data["openQuestionsIssues"], str):
+            lines.append(data["openQuestionsIssues"].strip() + "\n\n")
+        else:
+            lines.append(str(data["openQuestionsIssues"]) + "\n\n")
     return "".join(lines)
 
 def _format_decisions_md(decisions: List[models.Decision]) -> str:
@@ -634,6 +702,170 @@ def handle_import_markdown_to_conport(args: models.ImportMarkdownToConportArgs) 
     
     summary_report["message"] = f"ConPort data import from '{input_path}' complete. See details."
     return summary_report
+
+def handle_link_conport_items(args: models.LinkConportItemsArgs) -> Dict[str, Any]:
+    """
+    Handles the 'link_conport_items' MCP tool.
+    Creates a link between two ConPort items.
+    """
+    try:
+        link_to_create = models.ContextLink(
+            source_item_type=args.source_item_type,
+            source_item_id=args.source_item_id,
+            target_item_type=args.target_item_type,
+            target_item_id=args.target_item_id,
+            relationship_type=args.relationship_type,
+            description=args.description
+            # workspace_id is handled by the db function based on connection
+            # timestamp is handled by Pydantic model default_factory
+        )
+        logged_link = db.log_context_link(args.workspace_id, link_to_create)
+        return logged_link.model_dump(mode='json')
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error linking ConPort items: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in link_conport_items for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error linking ConPort items: {e}")
+
+def handle_get_linked_items(args: models.GetLinkedItemsArgs) -> List[Dict[str, Any]]:
+    """
+    Handles the 'get_linked_items' MCP tool.
+    Retrieves links for a given ConPort item, with optional filters.
+    """
+    try:
+        links_list = db.get_context_links(
+            workspace_id=args.workspace_id,
+            item_type=args.item_type,
+            item_id=args.item_id,
+            relationship_type_filter=args.relationship_type_filter,
+            linked_item_type_filter=args.linked_item_type_filter,
+            limit=args.limit
+        )
+        return [link.model_dump(mode='json') for link in links_list]
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error retrieving context links: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in get_linked_items for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error retrieving context links: {e}")
+
+def handle_get_item_history(args: models.GetItemHistoryArgs) -> List[Dict[str, Any]]:
+    """
+    Handles the 'get_item_history' MCP tool.
+    Retrieves history for product_context or active_context.
+    """
+    try:
+        # Pydantic model GetItemHistoryArgs already validates item_type
+        history_entries = db.get_item_history(args.workspace_id, args)
+        # The db.get_item_history function already returns a list of dicts
+        # where content is a dict and timestamp is a datetime object.
+        # We need to ensure timestamps are JSON serializable for the MCP response.
+        
+        serializable_history = []
+        for entry in history_entries:
+            entry_copy = entry.copy() # Avoid modifying the original dict from db
+            if isinstance(entry_copy.get("timestamp"), datetime):
+                entry_copy["timestamp"] = entry_copy["timestamp"].isoformat()
+            serializable_history.append(entry_copy)
+            
+        return serializable_history
+    except ValueError as e: # From db function if item_type is somehow invalid post-Pydantic
+         raise ToolArgumentError(str(e))
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error retrieving item history for {args.item_type}: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in get_item_history for workspace {args.workspace_id}, item_type {args.item_type}")
+        raise ContextPortalError(f"Unexpected error retrieving item history: {e}")
+
+# --- Batch Logging Handler ---
+
+_SINGLE_ITEM_HANDLERS_MAP = {
+    "decision": (handle_log_decision, models.LogDecisionArgs),
+    "progress_entry": (handle_log_progress, models.LogProgressArgs),
+    "system_pattern": (handle_log_system_pattern, models.LogSystemPatternArgs),
+    "custom_data": (handle_log_custom_data, models.LogCustomDataArgs),
+    # Add other loggable item types here if needed
+}
+
+def handle_batch_log_items(args: models.BatchLogItemsArgs) -> Dict[str, Any]:
+    """
+    Handles the 'batch_log_items' MCP tool.
+    Logs multiple items of a specified type.
+    """
+    if args.item_type not in _SINGLE_ITEM_HANDLERS_MAP:
+        raise ToolArgumentError(f"Unsupported item_type for batch logging: {args.item_type}. Supported types: {list(_SINGLE_ITEM_HANDLERS_MAP.keys())}")
+
+    handler_func, pydantic_model = _SINGLE_ITEM_HANDLERS_MAP[args.item_type]
+    
+    results = []
+    errors = []
+    success_count = 0
+    failure_count = 0
+
+    for i, item_data_dict in enumerate(args.items):
+        try:
+            # Each item_data_dict needs workspace_id for the Pydantic model
+            item_args_with_ws = {"workspace_id": args.workspace_id, **item_data_dict}
+            validated_item_args = pydantic_model(**item_args_with_ws)
+            result = handler_func(validated_item_args)
+            results.append(result)
+            success_count += 1
+        except ValidationError as ve:
+            log.error(f"Validation error for item {i} in batch_log_items ({args.item_type}): {ve}")
+            errors.append({"item_index": i, "error": str(ve), "data": item_data_dict})
+            failure_count += 1
+        except ContextPortalError as cpe:
+            log.error(f"ContextPortalError for item {i} in batch_log_items ({args.item_type}): {cpe}")
+            errors.append({"item_index": i, "error": str(cpe), "data": item_data_dict})
+            failure_count += 1
+        except Exception as e:
+            log.exception(f"Unexpected error for item {i} in batch_log_items ({args.item_type})")
+            errors.append({"item_index": i, "error": f"Unexpected server error: {type(e).__name__}", "data": item_data_dict})
+            failure_count += 1
+            
+    return {
+        "status": "partial_success" if success_count > 0 and failure_count > 0 else ("success" if failure_count == 0 else "failure"),
+        "message": f"Batch log for '{args.item_type}': {success_count} succeeded, {failure_count} failed.",
+        "successful_items": results,
+        "failed_items": errors
+    }
+
+# --- Deletion Tool Handlers ---
+
+def handle_delete_decision_by_id(args: models.DeleteDecisionByIdArgs) -> Dict[str, Any]:
+    """
+    Handles the 'delete_decision_by_id' MCP tool.
+    Deletes a decision by its ID.
+    """
+    try:
+        deleted = db.delete_decision_by_id(args.workspace_id, args.decision_id)
+        if deleted:
+            return {"status": "success", "message": f"Decision ID {args.decision_id} deleted successfully."}
+        else:
+            # This case means the ID was valid (e.g. integer) but not found.
+            # Consider if this should be an error or a specific status. For now, success with message.
+            return {"status": "success", "message": f"Decision ID {args.decision_id} not found."}
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error deleting decision ID {args.decision_id}: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in delete_decision_by_id for workspace {args.workspace_id}, decision ID {args.decision_id}")
+        raise ContextPortalError(f"Unexpected error deleting decision: {e}")
+
+def handle_delete_system_pattern_by_id(args: models.DeleteSystemPatternByIdArgs) -> Dict[str, Any]:
+    """
+    Handles the 'delete_system_pattern_by_id' MCP tool.
+    Deletes a system pattern by its ID.
+    """
+    try:
+        deleted = db.delete_system_pattern_by_id(args.workspace_id, args.pattern_id)
+        if deleted:
+            return {"status": "success", "message": f"System pattern ID {args.pattern_id} deleted successfully."}
+        else:
+            return {"status": "success", "message": f"System pattern ID {args.pattern_id} not found."}
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error deleting system pattern ID {args.pattern_id}: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in delete_system_pattern_by_id for workspace {args.workspace_id}, pattern ID {args.pattern_id}")
+        raise ContextPortalError(f"Unexpected error deleting system pattern: {e}")
 
 # --- Obsolete MCP Dispatcher Logic ---
 # The following (TOOL_DESCRIPTIONS, handle_list_tools, TOOL_HANDLERS, dispatch_tool)
