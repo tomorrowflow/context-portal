@@ -374,7 +374,7 @@ Key Python dependencies are managed via `requirements.txt` (or would be in a `py
 
 ### 4.4 Database Location
 The SQLite database file for each workspace is typically created at:
-`<workspace_id>/.context_portal/context.db`
+`<workspace_id>/context_portal/context.db`
 This path is determined by the `get_database_path` function in `core/config.py`.
 
 ### 4.5 Adding New Tools

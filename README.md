@@ -1,5 +1,12 @@
 # Context Portal MCP (ConPort)
 
+<div align="left">
+  <img src="assets/images/roo-logo.png" alt="Roo Code Logo" height="40" style="margin-right: 10px;"/>
+  <img src="assets/images/cline.png" alt="CLine Logo" height="40" style="margin-right: 10px;"/>
+  <img src="assets/images/windsurf.png" alt="Windsurf Cascade Logo" height="40" style="margin-right: 10px;"/>
+  <img src="assets/images/cursor.png" alt="Cursor IDE Logo" height="40" style="margin-right: 10px;"/>
+</div>
+
 A database-backed Model Context Protocol (MCP) server for managing structured project context, designed to be used by AI assistants and developer tools within IDEs and other interfaces.
 
 ## Overview
@@ -105,7 +112,7 @@ STDIO mode is recommended for IDE integration, allowing the IDE to manage the se
     ```
     *   `/path/to/your/context-portal/` is the absolute path where you cloned the `context-portal` repository.
     *   `"/actual/path/to/your/project_workspace"` is the absolute path to the root of the project whose context ConPort will manage (e.g., `${workspaceFolder}` in VS Code).
-    *   ConPort automatically creates its database at `your_project_workspace/.context_portal/context.db`.
+    *   ConPort automatically creates its database at `your_project_workspace/context_portal/context.db`.
 
 ## Client Configuration (STDIO Mode)
 
@@ -117,17 +124,14 @@ Configure your MCP client (e.g., IDE extension) to connect to ConPort. This exam
 {
   "mcpServers": {
     "conport-stdio": {
-      "command": "uv",
+      "command": "/path/to/your/virtualenv/bin/python",
       "args": [
-        "run",
-        "python",
-        "src/context_portal_mcp/main.py",
+        "/path/to/your/cloned/context-portal/src/context_portal_mcp/main.py",
         "--mode",
         "stdio",
         "--workspace_id",
         "${workspaceFolder}"
-      ],
-      "cwd": "/path/to/your/cloned/context-portal"
+      ]
     }
   }
 }
@@ -147,17 +151,14 @@ If your `context-portal` repository is cloned to `C:\Users\YourUser\Projects\con
 {
   "mcpServers": {
     "conport-stdio": {
-      "command": "uv",
+      "command": "C:\\Path\\To\\Your\\VirtualEnv\\Scripts\\python.exe",
       "args": [
-        "run",
-        "python",
-        "src/context_portal_mcp/main.py",
+        "C:\\Path\\To\\Your\\Cloned\\context-portal\\src\\context_portal_mcp\\main.py",
         "--mode",
         "stdio",
         "--workspace_id",
         "${workspaceFolder}"
-      ],
-      "cwd": "C:\\Users\\YourUser\\Projects\\context-portal"
+      ]
     }
   }
 }
@@ -187,10 +188,14 @@ These instructions equip the LLM with the knowledge to:
 *   Update ConPort with new information (decisions, progress, etc.).
 *   Manage custom data and relationships.
 *   Understand the importance of `workspace_id`.
+**Important Tip for Starting Sessions:**
+To ensure the LLM agent correctly initializes and loads context, especially in interfaces that might not always strictly adhere to custom instructions on the first message, it's a good practice to start your interaction with a clear directive like:
+`Initialize according to custom instructions.`
+This can help prompt the agent to perform its ConPort initialization sequence as defined in its strategy file.
 
 ## Initial ConPort Usage in a Workspace
 
-When you first start using ConPort in a new or existing project workspace, the ConPort database (`.context_portal/context.db`) will be automatically created by the server if it doesn't exist. To help bootstrap the initial project context, especially the **Product Context**, consider the following:
+When you first start using ConPort in a new or existing project workspace, the ConPort database (`context_portal/context.db`) will be automatically created by the server if it doesn't exist. To help bootstrap the initial project context, especially the **Product Context**, consider the following:
 
 ### Using a `projectBrief.md` File (Recommended)
 

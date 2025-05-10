@@ -138,6 +138,6 @@ dmypy.json
 .pyre/
 
 # Context Portal specific
-/.context_portal/
+/context_portal/
 *.sqlite
 *.sqlite-journal

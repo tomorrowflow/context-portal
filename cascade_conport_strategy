@@ -43,7 +43,7 @@ cascade_conport_integration:
   initialization_guidance:
     # This guidance assumes the agent has already determined the `ACTUAL_WORKSPACE_ID`.
     # It also assumes the agent can check for the existence of the ConPort DB file
-    # (e.g., `ACTUAL_WORKSPACE_ID + "/.context_portal/context.db"`) using its native file system tools.
+    # (e.g., `ACTUAL_WORKSPACE_ID + "/context_portal/context.db"`) using its native file system tools.
 
     on_existing_db_found: |
       # If an existing ConPort DB is found for the workspace:

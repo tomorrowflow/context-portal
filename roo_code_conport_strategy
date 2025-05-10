@@ -6,13 +6,13 @@ conport_memory_strategy:
     - **CONPORT INITIALIZATION AND CONTEXT LOADING:**
     - 1. Determine `ACTUAL_WORKSPACE_ID` (as per workspace_id_source).
     - 2. **Check for Existing Database:**
-    -    Use `list_files` tool with `path: ACTUAL_WORKSPACE_ID + "/.context_portal/"`.
+    -    Use `list_files` tool with `path: ACTUAL_WORKSPACE_ID + "/context_portal/"`.
     -    Examine result for `context.db`.
     - 3. **Branch based on DB Existence:**
     </thinking>
     # Agent Action Plan:
     # 1. Determine `ACTUAL_WORKSPACE_ID`.
-    # 2. Invoke `list_files` for `ACTUAL_WORKSPACE_ID + "/.context_portal/"`.
+    # 2. Invoke `list_files` for `ACTUAL_WORKSPACE_ID + "/context_portal/"`.
     # 3. Analyze result:
     #    IF 'context.db' is found:
     #        Proceed to 'load_existing_conport_context' sequence.
@@ -52,7 +52,7 @@ conport_memory_strategy:
     - No existing ConPort database found. Will ask the user about creating one.
     </thinking>
     # Agent Action Plan:
-    # 1. Inform user: "No existing ConPort database found at `ACTUAL_WORKSPACE_ID + "/.context_portal/context.db"`."
+    # 1. Inform user: "No existing ConPort database found at `ACTUAL_WORKSPACE_ID + "/context_portal/context.db"`."
     # 2. Use `ask_followup_question`:
     #    question: "Would you like to initialize a new ConPort database for this workspace? The database will be created automatically when ConPort tools are first used."
     #    suggestions:

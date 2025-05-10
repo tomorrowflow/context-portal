@@ -27,7 +27,7 @@ def get_database_path(workspace_id: str) -> pathlib.Path:
 
     workspace_path = pathlib.Path(workspace_id)
     log.debug(f"Constructed workspace_path: {workspace_path}")
-    db_dir = workspace_path / ".context_portal"
+    db_dir = workspace_path / "context_portal"
     log.debug(f"Constructed db_dir: {db_dir}")
     log.debug(f"Attempting mkdir for: {db_dir}")
     db_dir.mkdir(exist_ok=True) # Ensure the directory exists
