@@ -36,7 +36,7 @@ conport_memory_strategy:
     #        ACTION: Ask the user for next steps, e.g., "Review recent activity?", "Continue previous task?", "What would you like to work on?".
     #    ELSE (context remains empty/minimal):
     #        Set internal status: [CONPORT_ACTIVE].
-    #        Inform user: "ConPort data store found/initialized, but it appears to be empty or minimally populated. You can start by defining Product/Active Context or logging project information (or by creating a productBrief.md for next time)."
+    #        Inform user: "ConPort data store found/initialized, but it appears to be empty or minimally populated. You can start by defining Product/Active Context or logging project information (or by creating a projectBrief.md for next time)."
     #        ACTION: Ask the user for next steps, e.g., "Define Product Context?", "Log a new decision?".
 
     # 4. Handle Load Failure:
@@ -51,18 +51,18 @@ conport_memory_strategy:
     # 3. Based on user response:
     #    IF "Yes":
     #        Inform user: "Okay, a new ConPort data store will be created when needed."
-    #        Attempt to bootstrap Product Context from productBrief.md (this happens only on new setup):
-    #        ACTION: Use file system capabilities to check for `ACTUAL_WORKSPACE_ID + "/productBrief.md"`.
-    #        IF `productBrief.md` is found:
-    #            ACTION: Read the content of `productBrief.md`.
-    #            ACTION: Ask the user: "Found productBrief.md in your workspace. As we're setting up ConPort for the first time, would you like to import its content into the Product Context?" Provide clear "Yes" / "No" options.
+    #        Attempt to bootstrap Product Context from projectBrief.md (this happens only on new setup):
+    #        ACTION: Use file system capabilities to check for `ACTUAL_WORKSPACE_ID + "/projectBrief.md"`.
+    #        IF `projectBrief.md` is found:
+    #            ACTION: Read the content of `projectBrief.md`.
+    #            ACTION: Ask the user: "Found projectBrief.md in your workspace. As we're setting up ConPort for the first time, would you like to import its content into the Product Context?" Provide clear "Yes" / "No" options.
     #            IF user confirms "Yes":
     #                (No need to get current Product Context as DB is new)
-    #                ACTION: Prepare the content from `productBrief.md` for updating the Product Context in ConPort. This might involve creating a JSON object like `{"initial_product_brief": "[content from productBrief.md]"}`.
+    #                ACTION: Prepare the content from `projectBrief.md` for updating the Product Context in ConPort. This might involve creating a JSON object like `{"initial_product_brief": "[content from projectBrief.md]"}`.
     #                ACTION: Send an 'Update Product Context' request to ConPort with the prepared content. (Consult schema for exact parameters, typically `workspace_id`, `content`).
     #                Inform user of the import result (success or failure).
-    #        ELSE (`productBrief.md` NOT found):
-    #            ACTION: Ask the user: "`productBrief.md` was not found in the workspace root. Would you like to define the initial Product Context manually now?" Provide clear options like "Define Product Context manually.", "Skip for now."
+    #        ELSE (`projectBrief.md` NOT found):
+    #            ACTION: Ask the user: "`projectBrief.md` was not found in the workspace root. Would you like to define the initial Product Context manually now?" Provide clear options like "Define Product Context manually.", "Skip for now."
     #            (If "Define manually", guide user through an 'Update Product Context' interaction with ConPort).
     #        Proceed to 'load_existing_conport_context' sequence (which will now load the potentially bootstrapped product context and other empty contexts, after schema discovery).
     #    IF "No":

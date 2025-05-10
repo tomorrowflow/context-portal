@@ -409,9 +409,15 @@ While the ConPort server provides a robust set of features for managing project 
 3.  **Richer Data Types for Custom Data:**
     *   While `value` in `custom_data` is `Any` (JSON serializable), providing explicit support or validation for common structured types (e.g., lists of specific objects, typed dictionaries) could be beneficial.
 
-4.  **Semantic Search / AI-Powered Insights:**
-    *   Integrate vector embeddings and semantic search capabilities on text-heavy fields (like decision rationale, descriptions) to find conceptually similar items, not just keyword matches.
-    *   Tools to automatically summarize context or suggest relevant items based on current work.
+4.  **Enhanced Retrieval for RAG (Retrieval-Augmented Generation):**
+    ConPort already functions as a key component in a RAG system by providing structured, queryable project context. Its FTS capabilities (for decisions, custom data) and direct data retrieval tools (`get_product_context`, `get_decisions`, etc.) serve as the "Retrieval" mechanism. To further enhance this:
+    *   **Advanced Semantic Search:** Integrate vector embeddings for text-heavy fields (e.g., decision rationale, system pattern descriptions, custom data values). This would allow for finding conceptually similar items beyond keyword matches, significantly improving the quality of retrieved context for LLM augmentation. This could involve:
+        *   A new ConPort tool to generate and store embeddings for specified data items.
+        *   A new ConPort tool to perform semantic similarity searches using query embeddings.
+        *   Potentially integrating a vector database or extending SQLite with vector search capabilities (e.g., via extensions like `sqlite-vss`).
+    *   **Context Chunking for LLMs:** Introduce a tool or mechanism to retrieve specific ConPort data items (or parts of them, like a long decision rationale) in "chunks" optimized for LLM context windows. This would help in feeding manageable pieces of relevant information to the LLM.
+    *   **Automated Context Suggestion:** Develop tools within ConPort that, based on a query or a summary of the current task (perhaps provided by the LLM), could proactively suggest relevant ConPort items (decisions, patterns, glossary terms) that the LLM might want to retrieve to augment its generation. This could use a combination of FTS, semantic search, and knowledge graph traversal (`get_linked_items`).
+    *   **Hybrid Search:** Combine keyword-based FTS with semantic search to leverage the strengths of both approaches for more robust and relevant retrieval.
 
 5.  **More Granular History:**
     *   Currently, only Product and Active Context have explicit history tables. Consider if versioning/history for other entities like Decisions or System Patterns would be valuable.

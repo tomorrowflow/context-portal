@@ -59,18 +59,18 @@ cascade_conport_integration:
       2. Ask USER: "Would you like to initialize ConPort for this workspace? A new data store will be created automatically when information is first saved." (Provide Yes/No options).
       3. **If USER agrees to initialize:**
          - Inform USER: "Okay, ConPort will be set up for this workspace."
-         - **Check for `productBrief.md` (ONLY on this initial setup):**
-           - Use your file system tools to check if `productBrief.md` exists in the workspace root.
+         - **Check for `projectBrief.md` (ONLY on this initial setup):**
+           - Use your file system tools to check if `projectBrief.md` exists in the workspace root.
            - If it exists:
              - Read its content.
-             - Inform USER: "I found a `productBrief.md` file."
+             - Inform USER: "I found a `projectBrief.md` file."
              - Ask USER: "As we're setting up ConPort, would you like to import its content as the initial Product Context?" (Provide Yes/No options).
              - If USER agrees:
-               - Prepare a content object for Product Context (e.g., `{"initial_brief": "[content of productBrief.md]"}`).
+               - Prepare a content object for Product Context (e.g., `{"initial_brief": "[content of projectBrief.md]"}`).
                - Call ConPort's `update_product_context` (or equivalent operation to set Product Context) with this data.
                - Confirm import result with USER.
-           - Else (`productBrief.md` not found):
-             - Ask USER: "`productBrief.md` not found. Would you like to define the initial Product Context manually now?" (Provide Yes/No options).
+           - Else (`projectBrief.md` not found):
+             - Ask USER: "`projectBrief.md` not found. Would you like to define the initial Product Context manually now?" (Provide Yes/No options).
              - (If Yes, guide user to provide input for `update_product_context`).
          - Inform USER: "ConPort is ready. You can now start logging decisions, progress, etc."
       4. **If USER declines to initialize:**
