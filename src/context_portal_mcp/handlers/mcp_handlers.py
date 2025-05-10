@@ -246,6 +246,51 @@ def handle_get_system_patterns(args: models.GetSystemPatternsArgs) -> List[Dict[
         log.exception(f"Unexpected error in get_system_patterns for workspace {args.workspace_id}")
         raise ContextPortalError(f"Unexpected error in get_system_patterns: {e}")
 
+def handle_get_conport_schema(args: models.GetConportSchemaArgs) -> Dict[str, Dict[str, Any]]:
+    """
+    Handles the 'get_conport_schema' MCP tool.
+    Retrieves the JSON schema for all registered ConPort tools.
+    Assumes 'args' is an already validated Pydantic model instance.
+    """
+    try:
+        log.info(f"Handling get_conport_schema for workspace {args.workspace_id}")
+        tool_schemas: Dict[str, Dict[str, Any]] = {}
+        for tool_name, model_class in models.TOOL_ARG_MODELS.items():
+            # Ensure model_class is a Pydantic BaseModel before calling model_json_schema
+            if hasattr(model_class, 'model_json_schema') and callable(model_class.model_json_schema):
+                tool_schemas[tool_name] = model_class.model_json_schema()
+            else:
+                # This case should ideally not happen if TOOL_ARG_MODELS is correctly populated
+                log.warning(f"Model class for tool '{tool_name}' is not a Pydantic model or does not have 'model_json_schema' method.")
+                tool_schemas[tool_name] = {"error": "Schema not available"}
+        
+        return tool_schemas
+    except Exception as e:
+        log.exception(f"Unexpected error in get_conport_schema for workspace {args.workspace_id}")
+        # Return a more structured error if possible, or a generic one
+        raise ContextPortalError(f"Unexpected error retrieving ConPort schema: {e}")
+
+def handle_get_recent_activity_summary(args: models.GetRecentActivitySummaryArgs) -> Dict[str, Any]:
+    """
+    Handles the 'get_recent_activity_summary' MCP tool.
+    Retrieves a summary of recent activity from the database.
+    """
+    try:
+        log.info(f"Handling get_recent_activity_summary for workspace {args.workspace_id} with args: {args.model_dump_json()}")
+        summary_data = db.get_recent_activity_summary_data(
+            workspace_id=args.workspace_id,
+            hours_ago=args.hours_ago,
+            since_timestamp=args.since_timestamp,
+            limit_per_type=args.limit_per_type if args.limit_per_type is not None else 5 # Ensure default if None
+        )
+        return summary_data
+    except DatabaseError as e:
+        log.error(f"Database error in get_recent_activity_summary for workspace {args.workspace_id}: {e}")
+        raise ContextPortalError(f"Database error retrieving recent activity: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in get_recent_activity_summary for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error retrieving recent activity: {e}")
+
 def handle_log_custom_data(args: models.LogCustomDataArgs) -> Dict[str, Any]:
     """
     Handles the 'log_custom_data' MCP tool.

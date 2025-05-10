@@ -280,6 +280,32 @@ class GetItemHistoryArgs(BaseArgs):
             raise ValueError("item_type must be 'product_context' or 'active_context'")
         return values
 
+# --- ConPort Schema Tool Args ---
+
+class GetConportSchemaArgs(BaseArgs):
+    """Arguments for retrieving the ConPort tool schema."""
+    pass
+
+# --- Recent Activity Summary Tool Args ---
+
+class GetRecentActivitySummaryArgs(BaseArgs):
+    """Arguments for retrieving a summary of recent ConPort activity."""
+    hours_ago: Optional[int] = Field(None, gt=0, description="Look back this many hours for recent activity. Mutually exclusive with 'since_timestamp'.")
+    since_timestamp: Optional[datetime] = Field(None, description="Look back for activity since this specific timestamp. Mutually exclusive with 'hours_ago'.")
+    limit_per_type: Optional[int] = Field(5, gt=0, description="Maximum number of recent items to show per activity type (e.g., 5 most recent decisions).")
+
+    @model_validator(mode='before')
+    @classmethod
+    def check_timeframe_exclusive(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        if values.get('hours_ago') is not None and values.get('since_timestamp') is not None:
+            raise ValueError("Provide either 'hours_ago' or 'since_timestamp', not both.")
+        if values.get('hours_ago') is None and values.get('since_timestamp') is None:
+            # Default to a reasonable timeframe if neither is provided, e.g., last 24 hours
+            # For now, let's require one or allow the handler to define a default if none are passed.
+            # Or, make one of them have a default in Field. For now, let's assume handler can default if both are None.
+            pass # Allow both to be None, handler can set a default (e.g. 24 hours)
+        return values
+
 # Dictionary mapping tool names to their expected argument models (for potential future use/validation)
 # Note: The primary validation happens in the handler using these models.
 TOOL_ARG_MODELS = {
@@ -289,19 +315,24 @@ TOOL_ARG_MODELS = {
     "update_active_context": UpdateContextArgs,
     "log_decision": LogDecisionArgs,
     "get_decisions": GetDecisionsArgs,
-    "search_decisions_fts": SearchDecisionsArgs, # Added new tool
+    "search_decisions_fts": SearchDecisionsArgs,
+    "delete_decision_by_id": DeleteDecisionByIdArgs,
     "log_progress": LogProgressArgs,
     "get_progress": GetProgressArgs,
     "log_system_pattern": LogSystemPatternArgs,
     "get_system_patterns": GetSystemPatternsArgs,
+    "delete_system_pattern_by_id": DeleteSystemPatternByIdArgs,
     "log_custom_data": LogCustomDataArgs,
     "get_custom_data": GetCustomDataArgs,
     "delete_custom_data": DeleteCustomDataArgs,
-    "search_project_glossary_fts": SearchProjectGlossaryArgs, # Added new tool
+    "search_custom_data_value_fts": SearchCustomDataValueArgs,
+    "search_project_glossary_fts": SearchProjectGlossaryArgs,
     "export_conport_to_markdown": ExportConportToMarkdownArgs,
     "import_markdown_to_conport": ImportMarkdownToConportArgs,
-    "get_item_history": GetItemHistoryArgs, # Added new tool
-    "batch_log_items": BatchLogItemsArgs, # Added new tool
-    "delete_decision_by_id": DeleteDecisionByIdArgs, # Added new tool
-    "delete_system_pattern_by_id": DeleteSystemPatternByIdArgs, # Added new tool
+    "link_conport_items": LinkConportItemsArgs,
+    "get_linked_items": GetLinkedItemsArgs,
+    "batch_log_items": BatchLogItemsArgs,
+    "get_item_history": GetItemHistoryArgs,
+    "get_conport_schema": GetConportSchemaArgs,
+    "get_recent_activity_summary": GetRecentActivitySummaryArgs, # New tool
 }

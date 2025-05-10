@@ -4,7 +4,7 @@ import sqlite3
 import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta # Added timedelta
 
 from ..core.config import get_database_path
 from ..core.exceptions import DatabaseError, ConfigurationError
@@ -1159,6 +1159,137 @@ def get_item_history(
         return history_entries
     except (sqlite3.Error, json.JSONDecodeError) as e:
         raise DatabaseError(f"Failed to retrieve history for {args.item_type}: {e}")
+    finally:
+        cursor.close()
+
+# --- Recent Activity Summary ---
+
+def get_recent_activity_summary_data(
+workspace_id: str,
+hours_ago: Optional[int] = None,
+since_timestamp: Optional[datetime] = None,
+limit_per_type: int = 5
+) -> Dict[str, Any]:
+    """
+    Retrieves a summary of recent activity across various ConPort items.
+    """
+    conn = get_db_connection(workspace_id)
+    cursor = conn.cursor()
+    summary_results: Dict[str, Any] = {
+        "recent_decisions": [],
+        "recent_progress_entries": [],
+        "recent_product_context_updates": [],
+        "recent_active_context_updates": [],
+        "recent_links_created": [],
+        "notes": []
+    }
+
+    now_utc = datetime.utcnow()
+    summary_results["summary_period_end"] = now_utc.isoformat()
+
+    if since_timestamp:
+        start_datetime = since_timestamp
+    elif hours_ago:
+        start_datetime = now_utc - timedelta(hours=hours_ago)
+    else:
+        start_datetime = now_utc - timedelta(hours=24) # Default to last 24 hours
+
+    summary_results["summary_period_start"] = start_datetime.isoformat()
+
+    try:
+        # Recent Decisions
+        cursor.execute(
+            """
+            SELECT id, timestamp, summary, rationale, implementation_details, tags
+            FROM decisions WHERE timestamp >= ? ORDER BY timestamp DESC LIMIT ?
+            """,
+            (start_datetime, limit_per_type)
+        )
+        rows = cursor.fetchall()
+        summary_results["recent_decisions"] = [
+            models.Decision(
+                id=row['id'], timestamp=row['timestamp'], summary=row['summary'],
+                rationale=row['rationale'], implementation_details=row['implementation_details'],
+                tags=json.loads(row['tags']) if row['tags'] else None
+            ).model_dump(mode='json') for row in rows
+        ]
+
+        # Recent Progress Entries
+        cursor.execute(
+            """
+            SELECT id, timestamp, status, description, parent_id
+            FROM progress_entries WHERE timestamp >= ? ORDER BY timestamp DESC LIMIT ?
+            """,
+            (start_datetime, limit_per_type)
+        )
+        rows = cursor.fetchall()
+        summary_results["recent_progress_entries"] = [
+            models.ProgressEntry(
+                id=row['id'], timestamp=row['timestamp'], status=row['status'],
+                description=row['description'], parent_id=row['parent_id']
+            ).model_dump(mode='json') for row in rows
+        ]
+
+        # Recent Product Context Updates (from history)
+        cursor.execute(
+            """
+            SELECT id, timestamp, version, content, change_source
+            FROM product_context_history WHERE timestamp >= ? ORDER BY timestamp DESC LIMIT ?
+            """,
+            (start_datetime, limit_per_type)
+        )
+        rows = cursor.fetchall()
+        summary_results["recent_product_context_updates"] = [
+            models.ProductContextHistory(
+                id=row['id'], timestamp=row['timestamp'], version=row['version'],
+                content=json.loads(row['content']), change_source=row['change_source']
+            ).model_dump(mode='json') for row in rows
+        ]
+
+        # Recent Active Context Updates (from history)
+        cursor.execute(
+            """
+            SELECT id, timestamp, version, content, change_source
+            FROM active_context_history WHERE timestamp >= ? ORDER BY timestamp DESC LIMIT ?
+            """,
+            (start_datetime, limit_per_type)
+        )
+        rows = cursor.fetchall()
+        summary_results["recent_active_context_updates"] = [
+            models.ActiveContextHistory(
+                id=row['id'], timestamp=row['timestamp'], version=row['version'],
+                content=json.loads(row['content']), change_source=row['change_source']
+            ).model_dump(mode='json') for row in rows
+        ]
+        
+        # Recent Links Created
+        cursor.execute(
+            """
+            SELECT id, timestamp, source_item_type, source_item_id, target_item_type, target_item_id, relationship_type, description
+            FROM context_links WHERE timestamp >= ? ORDER BY timestamp DESC LIMIT ?
+            """,
+            (start_datetime, limit_per_type)
+        )
+        rows = cursor.fetchall()
+        summary_results["recent_links_created"] = [
+            models.ContextLink(
+                id=row['id'], timestamp=row['timestamp'], source_item_type=row['source_item_type'],
+                source_item_id=row['source_item_id'], target_item_type=row['target_item_type'],
+                target_item_id=row['target_item_id'], relationship_type=row['relationship_type'],
+                description=row['description']
+            ).model_dump(mode='json') for row in rows
+        ]
+
+        # Note about missing timestamps
+        summary_results["notes"].append(
+            "System Patterns and general Custom Data entries are not included in this summary "
+            "as they currently do not have creation/update timestamps in the database."
+        )
+
+        return summary_results
+
+    except (sqlite3.Error, json.JSONDecodeError) as e:
+        raise DatabaseError(f"Failed to retrieve recent activity summary: {e}")
     finally:
         cursor.close()
 

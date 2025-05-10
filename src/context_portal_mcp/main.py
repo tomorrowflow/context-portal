@@ -613,6 +613,47 @@ async def tool_delete_system_pattern_by_id(raw_args_from_fastmcp: Dict[str, Any]
         log.error(f"Error processing args for delete_system_pattern_by_id: {e}. Received raw: {raw_args_from_fastmcp}")
         raise exceptions.ContextPortalError(f"Server error processing delete_system_pattern_by_id: {type(e).__name__}")
 
+@conport_mcp.tool(name="get_conport_schema")
+async def tool_get_conport_schema(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Dict[str, Any]]:
+    sys.stderr.write(f"MAIN.PY: tool_get_conport_schema received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: 'workspace_id' not found in raw_args_from_fastmcp for get_conport_schema. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for get_conport_schema")
+        pydantic_args = models.GetConportSchemaArgs(workspace_id=workspace_id_val) # Corrected model name
+        return mcp_handlers.handle_get_conport_schema(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_conport_schema handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_conport_schema: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing get_conport_schema: {type(e).__name__}")
+
+@conport_mcp.tool(name="get_recent_activity_summary")
+async def tool_get_recent_activity_summary(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    sys.stderr.write(f"MAIN.PY: tool_get_recent_activity_summary received raw_args_from_fastmcp: {raw_args_from_fastmcp}\\n"); sys.stderr.flush()
+    try:
+        workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
+        if workspace_id_val is None:
+            log.error(f"CRITICAL: 'workspace_id' not found for get_recent_activity_summary. Received: {raw_args_from_fastmcp}")
+            raise ValueError("Missing 'workspace_id' in arguments for get_recent_activity_summary")
+        
+        # Pydantic will handle type conversion for datetime if 'since_timestamp' is an ISO string
+        pydantic_args = models.GetRecentActivitySummaryArgs(
+            workspace_id=workspace_id_val,
+            hours_ago=raw_args_from_fastmcp.get("hours_ago"),
+            since_timestamp=raw_args_from_fastmcp.get("since_timestamp"),
+            limit_per_type=raw_args_from_fastmcp.get("limit_per_type")
+        )
+        return mcp_handlers.handle_get_recent_activity_summary(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_recent_activity_summary handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_recent_activity_summary: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing get_recent_activity_summary: {type(e).__name__}")
+
 # Mount the FastMCP SSE app to the FastAPI app at the /mcp path
 # This will handle GET for SSE and POST for JSON-RPC client requests
 app.mount("/mcp", conport_mcp.sse_app())
