@@ -173,6 +173,8 @@ ConPort's effectiveness with LLM agents is significantly enhanced by providing s
     *   [`cline_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/cline_conport_strategy): Instructions optimized for LLMs interacting via a command-line interface that supports ConPort.
 *   **For Windsurf Cascade:**
     *   [`cascade_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/cascade_conport_strategy): Specific guidance for LLMs integrated with the Windsurf Cascade environment.
+*   **For General/Platform-Agnostic Use:**
+    *   [`generic_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/generic_conport_strategy): Provides a platform-agnostic set of instructions for any MCP-capable LLM. It guides the LLM to use ConPort's `get_conport_schema` tool to discover specific ConPort tool names and parameters, and then interact conceptually with ConPort's data types.
 
 **How to Use These Strategy Files:**
 
@@ -185,6 +187,33 @@ These instructions equip the LLM with the knowledge to:
 *   Update ConPort with new information (decisions, progress, etc.).
 *   Manage custom data and relationships.
 *   Understand the importance of `workspace_id`.
+
+## Initial ConPort Usage in a Workspace
+
+When you first start using ConPort in a new or existing project workspace, the ConPort database (`.context_portal/context.db`) will be automatically created by the server if it doesn't exist. To help bootstrap the initial project context, especially the **Product Context**, consider the following:
+
+### Using a `productBrief.md` File (Recommended)
+
+1.  **Create `productBrief.md`:** In the root directory of your project workspace, create a file named `productBrief.md`.
+2.  **Add Content:** Populate this file with a high-level overview of your project. This could include:
+    *   The main goal or purpose of the project.
+    *   Key features or components.
+    *   Target audience or users.
+    *   Overall architectural style or key technologies (if known).
+    *   Any other foundational information that defines the project.
+3.  **Automatic Prompt for Import:** When an LLM agent using one of the provided ConPort custom instruction sets (e.g., `roo_code_conport_strategy`) initializes in the workspace, it is designed to:
+    *   Check for the existence of `productBrief.md`.
+    *   If found, it will read the file and ask you if you'd like to import its content into the ConPort **Product Context**.
+    *   If you agree, the content will be added to ConPort, providing an immediate baseline for the project's Product Context.
+
+### Manual Initialization
+
+If `productBrief.md` is not found, or if you choose not to import it:
+*   The LLM agent (guided by its custom instructions) will typically inform you that the ConPort Product Context appears uninitialized.
+*   It may offer to help you define the Product Context manually, potentially by listing other files in your workspace to gather relevant information.
+*   You can then use the `update_product_context` tool (via the LLM) to populate this information.
+
+By providing initial context, either through `productBrief.md` or manual entry, you enable ConPort and the connected LLM agent to have a better foundational understanding of your project from the start.
 
 ## Available ConPort Tools
 

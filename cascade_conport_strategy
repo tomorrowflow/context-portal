@@ -72,12 +72,13 @@ cascade_conport_integration:
 
   user_driven_memory_sync:
     trigger_phrase_examples: # For Cascade's understanding of when to initiate this
-      - "Update project memory"
-      - "Synchronize ConPort"
-      - "Review and update our shared context"
+      - "Sync ConPort"
+      - "ConPort Sync"
+      # - "Update project memory" # Keeping one old one for broader compatibility initially, can be removed later
+      # - "Review and update our shared context"
     action_summary: |
-      If the USER requests a general update or synchronization of the project memory (ConPort):
-      1. Acknowledge: Inform the USER you will review the recent conversation and update the project memory accordingly.
+      If the USER requests a "ConPort Sync" or similar:
+      1. Acknowledge: Inform the USER with something like "[CONPORT_MEMORY: Syncing with chat session...]" or "Okay, I'll review our discussion and sync relevant information with ConPort."
       2. Review Chat: Analyze the current chat session for new information, decisions, progress, context changes, and clarifications that should be logged or updated in ConPort.
       3. Log/Update Systematically:
           - Explain to the USER what type of information you are about to save/update (e.g., "I'll log the decision we just made about the database schema.").

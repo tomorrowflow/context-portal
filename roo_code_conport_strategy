@@ -58,11 +58,11 @@ conport_memory_strategy:
 
     # 3. Analyze loaded context (potentially updated by step 2):
     #    IF results from step 1 (and potentially step 2's import) are NOT empty/minimal:
-    #        Set internal status to [CONPORT_MEMORY: ACTIVE].
+    #        Set internal status to [CONPORT_ACTIVE].
     #        Inform user: "ConPort memory initialized. Existing contexts and recent activity loaded."
     #        Use `ask_followup_question` with suggestions like "Review recent activity?", "Continue previous task?", "What would you like to work on?".
     #    ELSE (loaded context is still empty/minimal despite DB file existing and no productBrief import):
-    #        Set internal status to [CONPORT_MEMORY: ACTIVE].
+    #        Set internal status to [CONPORT_ACTIVE].
     #        Inform user: "ConPort database file found, but it appears to be empty or minimally initialized. You can start by defining Product/Active Context or logging project information."
     #        Use `ask_followup_question` with suggestions like "Define Product Context?", "Log a new decision?".
 
@@ -91,13 +91,13 @@ conport_memory_strategy:
     <thinking>
     - Initial ConPort tool calls failed, server seems unavailable, or user chose not to initialize.
     - I will inform the user that ConPort could not be initialized/used for context management.
-    - I will set my status to [CONPORT_MEMORY: INACTIVE].
+    - I will set my status to [CONPORT_INACTIVE].
     - I will proceed with the user's task using only information directly available or from other tools.
     </thinking>
-    # Agent Action: Inform user: "ConPort memory will not be used for this session. Status: [CONPORT_MEMORY: INACTIVE]."
+    # Agent Action: Inform user: "ConPort memory will not be used for this session. Status: [CONPORT_INACTIVE]."
 
   general:
-    status_prefix: "Begin EVERY response with either '[CONPORT_MEMORY: ACTIVE]' or '[CONPORT_MEMORY: INACTIVE]'."
+    status_prefix: "Begin EVERY response with either '[CONPORT_ACTIVE]' or '[CONPORT_INACTIVE]'."
     proactive_logging_cue: "Remember to proactively identify opportunities to log or update ConPort based on the conversation (e.g., if user outlines a new plan, consider logging decisions or progress). Confirm with the user before logging."
 
   conport_updates:
@@ -232,12 +232,12 @@ conport_memory_strategy:
       product_active_context: "The internal JSON structure of 'Product Context' and 'Active Context' (the `content` field) is flexible. Work with the user to define/evolve this structure via `update_product_context` and `update_active_context`. The server stores this `content` as a JSON blob."
       decisions_progress_patterns: "The fundamental fields for Decisions, Progress, and System Patterns are fixed by ConPort's tools. For significantly different structures or additional fields, guide the user to create a new custom context category using `log_custom_data` (e.g., category: 'project_milestones_detailed')."
 
-  umb_update_conport: # Update Memory Bank
-    trigger: "^(Update ConPort|UC|Update Memory Bank|UMB)$"
-    user_acknowledgement_text: "[CONPORT_MEMORY: UPDATING]"
+  conport_sync_routine: # Renamed from umb_update_conport
+    trigger: "^(Sync ConPort|ConPort Sync)$" # New trigger phrases
+    user_acknowledgement_text: "[CONPORT_SYNCING]" # Simplified acknowledgement, implies active
     instructions:
       - "Halt Current Task: Stop current activity."
-      - "Acknowledge Command: Send `[CONPORT_MEMORY: UPDATING]` to the user."
+      - "Acknowledge Command: Send `[CONPORT_SYNCING]` to the user."
       - "Review Chat History: Analyze the complete current chat session for new information, decisions, progress, context changes, clarifications, and potential new relationships between items."
     core_update_process: |
       <thinking>

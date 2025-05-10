@@ -5,7 +5,7 @@ Version: 0.1.0
 ## 1. Introduction & Overview
 
 ### Purpose
-The Context Portal (ConPort) MCP server is designed to manage and provide structured project context for AI assistants, particularly within Integrated Development Environments (IDEs). Its primary goal is to enhance an AI's understanding and "memory" of a specific software project by maintaining a queryable, persistent, and workspace-specific knowledge base. This is inspired by concepts like "memory banks" for AI agents.
+The Context Portal (ConPort) MCP server is designed to manage and provide structured project context for AI assistants, particularly within Integrated Development Environments (IDEs). Its primary goal is to enhance an AI's contextual understanding of a specific software project by maintaining a queryable, persistent, and workspace-specific knowledge base. This approach provides a structured alternative to simpler, file-based context systems.
 
 ### Core Technologies
 *   **Language/Framework:** Python, utilizing the FastAPI framework for robust web server capabilities and Pydantic for data validation and modeling.
