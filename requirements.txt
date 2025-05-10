@@ -1,4 +1,5 @@
 fastapi
+uvicorn[standard]
 pydantic
 mcp[cli] # For FastMCP server and STDIO transport
 # sqlite3 is built-in

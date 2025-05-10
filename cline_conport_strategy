@@ -1,148 +1,239 @@
 conport_memory_strategy:
-  # This workspace_id is CRITICAL. The agent must determine this at the start.
-  # It can be from an environment variable like ${workspaceFolder} if available from the client,
-  # or the agent MUST ask the user for the absolute path to the current project workspace.
   workspace_id_source: "The agent must obtain the absolute path to the current workspace to use as `workspace_id` for all ConPort tool calls. This might be available as `${workspaceFolder}` or require asking the user."
 
   initialization: |
     <thinking>
     - **CONPORT INITIALIZATION AND CONTEXT LOADING:**
-    - First, I need to ensure I have the `workspace_id`. I will check if it's available (e.g., as `${workspaceFolder}`). If not, I MUST ask the user for the absolute path to the current project workspace.
-    - Then, I will attempt to connect to the `conport` server and load initial context using the 'get_*' tools.
-    - I will check if the loaded context appears empty or minimal.
+    - 1. Determine `ACTUAL_WORKSPACE_ID` (as per workspace_id_source).
+    - 2. **Check for Existing Database:**
+    -    Use `list_files` tool with `path: ACTUAL_WORKSPACE_ID + "/.context_portal/"`.
+    -    Examine result for `context.db`.
+    - 3. **Branch based on DB Existence:**
     </thinking>
     # Agent Action Plan:
     # 1. Determine `ACTUAL_WORKSPACE_ID`.
-    # 2. Attempt to load initial contexts from ConPort:
-    #    Invoke ConPort tool `get_product_context` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID"}`. Store result.
-    #    Invoke ConPort tool `get_active_context` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID"}`. Store result.
-    #    Invoke ConPort tool `get_decisions` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "limit": 1}`. Store result. (Check for *any* decisions to see if it's empty)
-    #    Invoke ConPort tool `get_progress` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "limit": 1}`. Store result. (Check for *any* progress)
-    #    Invoke ConPort tool `get_system_patterns` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "limit": 1}`. Store result. (Check for *any* patterns)
-    #    Invoke ConPort tool `get_custom_data` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "category": "critical_settings"}`. Store result. (Check for *any* custom data)
-    #    Invoke ConPort tool `get_custom_data` using `use_mcp_tool` with server `conport-stdio` and arguments `{"workspace_id": "ACTUAL_WORKSPACE_ID", "category": "ProjectGlossary"}`. Store result. (Check for *any* glossary terms)
-    # 3. Analyze loaded context emptiness:
-    #    Check if results from step 3 indicate an empty database (e.g., get_* calls returned empty lists or dictionaries).
-    # 4. Standard Initialization Completion:
-    #    If the the loaded context is NOT empty/minimal:
+    # 2. Invoke `list_files` for `ACTUAL_WORKSPACE_ID + "/.context_portal/"`.
+    # 3. Analyze result:
+    #    IF 'context.db' is found:
+    #        Proceed to 'load_existing_conport_context' sequence.
+    #    ELSE ('context.db' NOT found):
+    #        Proceed to 'handle_new_conport_setup' sequence.
+
+  load_existing_conport_context: | # New sequence
+    <thinking>
+    - Existing ConPort database found. Attempting to load initial contexts.
+    - Will check if loaded context appears empty (which might indicate a reset or issue).
+    </thinking>
+    # Agent Action Plan:
+    # 1. Attempt to load initial contexts from ConPort (same as current strategy's step 2):
+    #    Invoke `get_product_context`... Store result.
+    #    Invoke `get_active_context`... Store result.
+    #    Invoke `get_decisions` (limit 5 for a better overview)... Store result.
+    #    Invoke `get_progress` (limit 5)... Store result.
+    #    Invoke `get_system_patterns` (limit 5)... Store result.
+    #    Invoke `get_custom_data` (category: "critical_settings")... Store result.
+    #    Invoke `get_custom_data` (category: "ProjectGlossary")... Store result.
+    #    Invoke `get_recent_activity_summary` (default params, e.g., last 24h, limit 3 per type) for a quick catch-up. Store result.
+    # 2. Analyze loaded context:
+    #    IF results from step 1 are NOT empty/minimal:
     #        Set internal status to [CONPORT_MEMORY: ACTIVE].
-    #        Inform user: "ConPort memory initialized and all contexts loaded. The agent should then use the ask_followup_question tool.
-    # 5. Handle Initialization Failure:
-    #    If any initial `get_*` calls in step 3 failed unexpectedly (e.g., server not found, tool error not related to empty data), fall back to the `if_conport_unavailable_or_init_failed` logic.
+    #        Inform user: "ConPort memory initialized. Existing contexts and recent activity loaded."
+    #        Use `ask_followup_question` with suggestions like "Review recent activity?", "Continue previous task?", "What would you like to work on?".
+    #    ELSE (loaded context is empty/minimal despite DB file existing):
+    #        Set internal status to [CONPORT_MEMORY: ACTIVE].
+    #        Inform user: "ConPort database file found, but it appears to be empty or minimally initialized. You can start by defining Product/Active Context or logging project information."
+    #        Use `ask_followup_question` with suggestions like "Define Product Context?", "Log a new decision?".
+    # 3. Handle Load Failure:
+    #    If any `get_*` calls failed unexpectedly, fall back to `if_conport_unavailable_or_init_failed`.
+
+  handle_new_conport_setup: | # New sequence
+    <thinking>
+    - No existing ConPort database found. Will ask the user about creating one.
+    </thinking>
+    # Agent Action Plan:
+    # 1. Inform user: "No existing ConPort database found at `ACTUAL_WORKSPACE_ID + "/.context_portal/context.db"`."
+    # 2. Use `ask_followup_question`:
+    #    question: "Would you like to initialize a new ConPort database for this workspace? The database will be created automatically when ConPort tools are first used."
+    #    suggestions:
+    #      - "Yes, initialize a new ConPort database."
+    #      - "No, do not use ConPort for this session."
+    # 3. Based on user response:
+    #    IF "Yes":
+    #        Inform user: "Okay, a new ConPort database will be created. Proceeding with initialization..."
+    #        Proceed to 'load_existing_conport_context' sequence (which will now effectively be initializing a new DB on first tool call and then find it empty).
+    #    IF "No":
+    #        Proceed to `if_conport_unavailable_or_init_failed` (with a message indicating user chose not to initialize).
 
   if_conport_unavailable_or_init_failed: |
     <thinking>
-    - Initial ConPort tool calls failed (e.g., server not found, tool execution error, unexpected response format) or the server seems unavailable for this workspace.
-    - I will inform the user that ConPort could not be initialized for context management.
+    - Initial ConPort tool calls failed, server seems unavailable, or user chose not to initialize.
+    - I will inform the user that ConPort could not be initialized/used for context management.
     - I will set my status to [CONPORT_MEMORY: INACTIVE].
-    - I will proceed with the user's task using only the information directly available in the chat or from other tools, or ask clarifying questions if essential context is missing.
+    - I will proceed with the user's task using only information directly available or from other tools.
     </thinking>
-    # Agent Action: Inform user: "Could not initialize or load context from ConPort for this workspace. Proceeding without ConPort-managed memory. Memory Bank status is [CONPORT_MEMORY: INACTIVE]."
+    # Agent Action: Inform user: "ConPort memory will not be used for this session. Status: [CONPORT_MEMORY: INACTIVE]."
 
   general:
     status_prefix: "Begin EVERY response with either '[CONPORT_MEMORY: ACTIVE]' or '[CONPORT_MEMORY: INACTIVE]'."
+    proactive_logging_cue: "Remember to proactively identify opportunities to log or update ConPort based on the conversation (e.g., if user outlines a new plan, consider logging decisions or progress). Confirm with the user before logging."
 
   conport_updates:
-    frequency: "UPDATE CONPORT THROUGHOUT THE CHAT SESSION, WHEN SIGNIFICANT CHANGES OCCUR IN THE PROJECT, OR WHEN EXPLICITLY REQUESTED BY THE USER."
+    frequency: "UPDATE CONPORT THROUGHOUT THE CHAT SESSION, WHEN SIGNIFICANT CHANGES OCCUR, OR WHEN EXPLICITLY REQUESTED."
     workspace_id_note: "All ConPort tool calls require the `workspace_id`."
 
-    log_decision:
-      trigger: "When a significant architectural or implementation decision is made and confirmed by the user."
+    # --- Context Management Tools ---
+    get_product_context:
+      trigger: "To understand the overall project goals, features, or architecture at any time."
       action_description: |
-        <thinking>
-        - A decision needs to be logged to ConPort.
-        - Required arguments for 'log_decision': `workspace_id`, `summary`. Optional: `rationale`, `implementation_details`.
-        - I will construct the arguments as a JSON object.
-        </thinking>
-        # Agent Action: Invoke ConPort tool `log_decision` using `use_mcp_tool` with server `conport`.
-        # Arguments example: `{"workspace_id": "ACTUAL_WORKSPACE_ID", "summary": "Decision summary", "rationale": "Rationale details", "implementation_details": "Implementation notes"}`.
-
+        # Agent Action: Invoke `get_product_context` (`{"workspace_id": "..."}`). Result is a direct dictionary.
     update_product_context:
       trigger: "When the high-level project description, goals, features, or overall architecture changes significantly, as confirmed by the user."
       action_description: |
         <thinking>
-        - Product context needs updating in ConPort.
-        - Step 1: Fetch the current product context using 'get_product_context'. The result is a JSON string in the 'text' field of the TextContent; parse this JSON.
-        - Step 2: Prepare the *complete new JSON object* for the product context. The internal structure (e.g., keys like "projectGoal", "keyFeatures") is flexible and should be maintained consistently or updated thoughtfully with user confirmation.
-        - Step 3: Use the 'update_product_context' tool with the new complete `content` object.
+        - Product context needs updating.
+        - Step 1: (Optional but recommended if unsure of current state) Invoke `get_product_context`.
+        - Step 2: Prepare the `content` (for full overwrite) or `patch_content` (for partial update) dictionary.
+        - For `patch_content`, use `\"__DELETE__\": null` (or a similar agreed sentinel if `null` is problematic, though `__DELETE__` itself as a value is fine) to remove a key.
+        - Confirm changes with the user.
         </thinking>
-        # Agent Action Plan:
-        # 1. Invoke ConPort tool `get_product_context` (`{"workspace_id": "..."}`). Parse JSON from result.
-        # 2. Construct the new, complete JSON object for product context.
-        # 3. Invoke ConPort tool `update_product_context` (`{"workspace_id": "...", "content": NEW_JSON_OBJECT}`).
-
+        # Agent Action: Invoke `update_product_context` (`{"workspace_id": "...", "content": {...}}` or `{"workspace_id": "...", "patch_content": {"key_to_update": "new_value", "key_to_delete": "__DELETE__"}}`).
+    get_active_context:
+      # Similar to get_product_context
     update_active_context:
-      trigger: "When the current focus of work changes, significant progress is made, or new open questions/issues arise, as confirmed by the user."
-      action_description: |
-        <thinking>
-        - Active context needs updating in ConPort.
-        - Step 1: Fetch current active context using 'get_active_context'. Parse JSON from result.
-        - Step 2: Prepare the *complete new JSON object* for active context (e.g., with "currentFocus", "recentChanges", "openQuestionsIssues").
-        - Step 3: Use 'update_active_context' tool.
-        </thinking>
-        # Agent Action Plan:
-        # 1. Invoke ConPort tool `get_active_context` (`{"workspace_id": "..."}`). Parse JSON.
-        # 2. Construct the new, complete JSON object for active context.
-        # 3. Invoke ConPort tool `update_active_context` (`{"workspace_id": "...", "content": NEW_JSON_OBJECT}`).
+      # Similar to update_product_context, referencing patch_content and __DELETE__
 
+    # --- Decision Tools ---
+    log_decision:
+      trigger: "When a significant architectural or implementation decision is made and confirmed by the user."
+      action_description: |
+        # ... (current description is good, ensure it mentions `tags` as optional List[str])
+    get_decisions:
+      trigger: "To retrieve a list of past decisions, e.g., to review history or find a specific decision."
+      action_description: |
+        # Agent Action: Invoke `get_decisions` (`{"workspace_id": "...", "limit": N, "tags_filter_include_all": ["tag1"], "tags_filter_include_any": ["tag2"]}`). Explain optional filters.
+    search_decisions_fts:
+      trigger: "When searching for decisions by keywords in summary, rationale, details, or tags, and basic `get_decisions` is insufficient."
+      action_description: |
+        # Agent Action: Invoke `search_decisions_fts` (`{"workspace_id": "...", "query_term": "search keywords", "limit": N}`).
+    delete_decision_by_id:
+      trigger: "When user explicitly confirms deletion of a specific decision by its ID."
+      action_description: |
+        # Agent Action: Invoke `delete_decision_by_id` (`{"workspace_id": "...", "decision_id": ID}`). Emphasize prior confirmation.
+
+    # --- Progress Tools ---
     log_progress:
-      trigger: "When a task begins, its status changes (e.g., to IN_PROGRESS, DONE), or it's completed."
+      trigger: "When a task begins, its status changes (e.g., TODO, IN_PROGRESS, DONE), or it's completed. Also when a new sub-task is defined."
       action_description: |
-        <thinking>
-        - Progress needs to be logged to ConPort.
-        - Required for 'log_progress': `workspace_id`, `status`, `description`. Optional: `parent_id`.
-        </thinking>
-        # Agent Action: Invoke ConPort tool `log_progress` with arguments like `{"workspace_id": "...", "status": "IN_PROGRESS", "description": "...", "parent_id": null}`.
+        # ... (current description is good). Add note about `linked_item_type` and `linked_item_id` for automatic linking if relevant context item exists.
+    get_progress:
+      trigger: "To review current task statuses, find pending tasks, or check history of progress."
+      action_description: |
+        # Agent Action: Invoke `get_progress` (`{"workspace_id": "...", "status_filter": "...", "parent_id_filter": ID, "limit": N}`).
 
+    # --- System Pattern Tools ---
     log_system_pattern:
-      trigger: "When new architectural, coding, or testing patterns are introduced or existing ones are significantly modified."
+      # ... (current description is good, ensure it mentions `tags` as optional List[str])
+    get_system_patterns:
+      # ... (similar to get_decisions with tag filters)
+    delete_system_pattern_by_id:
+      # ... (similar to delete_decision_by_id)
+
+    # --- Custom Data Tools ---
+    log_custom_data:
+      # ... (current description is good, emphasize value is JSON serializable)
+    get_custom_data:
+      # ... (current description is good)
+    delete_custom_data:
+      # ... (current description is good)
+    search_custom_data_value_fts:
+      trigger: "When searching for specific terms within any custom data values, categories, or keys."
+      action_description: |
+        # Agent Action: Invoke `search_custom_data_value_fts` (`{"workspace_id": "...", "query_term": "...", "category_filter": "...", "limit": N}`).
+    search_project_glossary_fts:
+      trigger: "When specifically searching for terms within the 'ProjectGlossary' custom data category."
+      action_description: |
+        # Agent Action: Invoke `search_project_glossary_fts` (`{"workspace_id": "...", "query_term": "...", "limit": N}`).
+
+    # --- Linking Tools ---
+    link_conport_items:
+      trigger: "When a meaningful relationship is identified and confirmed between two existing ConPort items (e.g., a decision is implemented by a system pattern, a progress item tracks a decision)."
       action_description: |
         <thinking>
-        - A system pattern needs to be logged/updated in ConPort.
-        - Required for 'log_system_pattern': `workspace_id`, `name`. Optional: `description`.
+        - Need to link two items. Identify source type/ID, target type/ID, and relationship.
+        - Common relationship_types: 'implements', 'related_to', 'tracks', 'blocks', 'clarifies', 'depends_on'. Propose a suitable one or ask user.
         </thinking>
-        # Agent Action: Invoke ConPort tool `log_system_pattern` with arguments like `{"workspace_id": "...", "name": "Pattern Name", "description": "Pattern description..."}`.
+        # Agent Action: Invoke `link_conport_items` (`{"workspace_id":"...", "source_item_type":"...", "source_item_id":"...", "target_item_type":"...", "target_item_id":"...", "relationship_type":"...", "description":"Optional notes"}`).
+    get_linked_items:
+      trigger: "To understand the relationships of a specific ConPort item, or to explore the knowledge graph around an item."
+      action_description: |
+        # Agent Action: Invoke `get_linked_items` (`{"workspace_id":"...", "item_type":"...", "item_id":"...", "relationship_type_filter":"...", "linked_item_type_filter":"...", "limit":N}`).
 
-    manage_custom_context:
-      trigger: "When project-specific information is identified that doesn't fit standard categories, or when such custom data needs to be retrieved or deleted."
-      guidelines: |
+    # --- History Tool ---
+    get_item_history:
+      trigger: "When needing to review past versions of Product Context or Active Context, or to see when specific changes were made."
+      action_description: |
+        # Agent Action: Invoke `get_item_history` (`{"workspace_id":"...", "item_type":"product_context" or "active_context", "limit":N, "version":V, "before_timestamp":"ISO_DATETIME", "after_timestamp":"ISO_DATETIME"}`).
+
+    # --- Batch Logging Tool ---
+    batch_log_items:
+      trigger: "When the user provides a list of multiple items of the SAME type (e.g., several decisions, multiple new glossary terms) to be logged at once."
+      action_description: |
         <thinking>
-        - Custom context in ConPort uses `category`, `key`, and `value` (JSON-serializable).
-        - For new custom context: Propose `category` and `key` to the user. The `value` can be any JSON data. Use 'log_custom_data'.
-        - To retrieve: Use 'get_custom_data' with `category` and/or `key`.
-        - To delete: Use 'delete_custom_data' with `category` and `key`.
-        - Consider maintaining a list of active custom categories for this project by logging this list itself using `log_custom_data` (e.g., category: "conport_meta", key: "custom_categories_list", value: ["api_endpoints", "team_roles"]).
+        - User provided multiple items. Verify they are of the same loggable type.
+        - Construct the `items` list, where each element is a dictionary of arguments for the single-item log tool (e.g., for `log_decision`).
         </thinking>
-      log_action_description: "Agent Action: Invoke ConPort tool `log_custom_data` with `{\"workspace_id\": \"...\", \"category\": \"...\", \"key\": \"...\", \"value\": JSON_VALUE}`."
-      get_action_description: "Agent Action: Invoke ConPort tool `get_custom_data` with `{\"workspace_id\": \"...\", \"category\": \"...\" (optional), \"key\": \"...\" (optional)}`."
-      delete_action_description: "Agent Action: Invoke ConPort tool `delete_custom_data` with `{\"workspace_id\": \"...\", \"category\": \"...\", \"key\": \"...\"}`."
+        # Agent Action: Invoke `batch_log_items` (`{"workspace_id":"...", "item_type":"decision", "items": [{"summary":"...", "rationale":"..."}, {"summary":"..."}] }`).
 
+    # --- Meta Tools ---
+    get_recent_activity_summary:
+      trigger: "At the start of a new session to catch up, or when the user asks for a summary of recent project activities."
+      action_description: |
+        # Agent Action: Invoke `get_recent_activity_summary` (`{"workspace_id":"...", "hours_ago":H, "since_timestamp":"ISO_DATETIME", "limit_per_type":N}`). Explain default if no time args.
+    get_conport_schema: # For LLM's internal use or advanced user query
+      trigger: "If there's uncertainty about available ConPort tools or their arguments during a session (internal LLM check), or if an advanced user specifically asks for the server's tool schema."
+      action_description: |
+        # Agent Action: Invoke `get_conport_schema` (`{"workspace_id":"..."}`). Primarily for internal LLM reference or direct user request.
+
+    # --- Import/Export Tools ---
+    export_conport_to_markdown:
+      trigger: "When the user requests to export the current ConPort data to markdown files (e.g., for backup, sharing, or version control)."
+      action_description: |
+        # Agent Action: Invoke `export_conport_to_markdown` (`{"workspace_id":"...", "output_path":"optional/relative/path"}`). Explain default output path if not provided.
+    import_markdown_to_conport:
+      trigger: "When the user requests to import ConPort data from a directory of markdown files previously exported by this system."
+      action_description: |
+        # Agent Action: Invoke `import_markdown_to_conport` (`{"workspace_id":"...", "input_path":"optional/relative/path"}`). Explain default input path. Warn about potential overwrites or merges if data already exists.
+
+    # (Keep reconfigure_core_guidance as is)
     reconfigure_core_guidance:
       product_active_context: "The internal JSON structure of 'Product Context' and 'Active Context' (the `content` field) is flexible. Work with the user to define/evolve this structure via `update_product_context` and `update_active_context`. The server stores this `content` as a JSON blob."
       decisions_progress_patterns: "The fundamental fields for Decisions, Progress, and System Patterns are fixed by ConPort's tools. For significantly different structures or additional fields, guide the user to create a new custom context category using `log_custom_data` (e.g., category: 'project_milestones_detailed')."
 
-  umb_update_conport:
+  umb_update_conport: # Update Memory Bank
     trigger: "^(Update ConPort|UC|Update Memory Bank|UMB)$"
     user_acknowledgement_text: "[CONPORT_MEMORY: UPDATING]"
     instructions:
       - "Halt Current Task: Stop current activity."
       - "Acknowledge Command: Send `[CONPORT_MEMORY: UPDATING]` to the user."
-      - "Review Chat History: Analyze the complete current chat session for new information, decisions, progress, context changes, and clarifications."
+      - "Review Chat History: Analyze the complete current chat session for new information, decisions, progress, context changes, clarifications, and potential new relationships between items."
     core_update_process: |
       <thinking>
       - Synchronize ConPort with information from the current chat session.
-      - Use appropriate ConPort tools.
-      - For `update_product_context` and `update_active_context`, first fetch current content, then merge/update, then call the update tool with the *complete new content object*.
+      - Use appropriate ConPort tools based on identified changes.
+      - For `update_product_context` and `update_active_context`, first fetch current content, then merge/update (potentially using `patch_content`), then call the update tool with the *complete new content object* or the patch.
       - All tool calls require the `workspace_id`.
       </thinking>
       # Agent Action Plan (Illustrative - perform as needed based on chat review):
-      # 1. Log new decisions: Use `log_decision`.
-      # 2. Log task progress: Use `log_progress`.
-      # 3. Log new system patterns: Use `log_system_pattern`.
-      # 4. Update Active Context: Invoke `get_active_context`, merge changes, invoke `update_active_context`.
-      # 5. Update Product Context (if significant changes): Invoke `get_product_context`, merge changes, invoke `update_product_context`.
-      # 6. Log new custom context: Use `log_custom_data`.
-      # 7. After updates, re-fetch key contexts if necessary to refresh internal understanding (e.g., `get_active_context`).
+      # 1. Log new decisions (use `log_decision`).
+      # 2. Log task progress/status changes (use `log_progress`).
+      # 3. Log new system patterns (use `log_system_pattern`).
+      # 4. Update Active Context (use `get_active_context` then `update_active_context` with full or patch).
+      # 5. Update Product Context if significant changes (use `get_product_context` then `update_product_context` with full or patch).
+      # 6. Log new custom context, including ProjectGlossary terms (use `log_custom_data`).
+      # 7. Identify and log new relationships between items (use `link_conport_items`).
+      # 8. If many items of the same type were discussed, consider `batch_log_items`.
+      # 9. After updates, consider a brief `get_recent_activity_summary` to confirm and refresh understanding.
     post_umb_actions:
       - "Inform user: ConPort has been synchronized with information from the current session."
       - "Resume previous task or await new instructions."
+

@@ -1,0 +1,70 @@
+cascade_conport_integration:
+  introduction: |
+    These instructions guide Windsurf Cascade on integrating with the ConPort project memory system (MCP plugin).
+    Treat ConPort as a primary source for "MEMORIES" to guide your work.
+
+  purpose: |
+    ConPort stores and retrieves structured information about the current workspace, including:
+    - Overall project goals and architecture (Product Context).
+    - Current work focus, recent changes, and open questions (Active Context).
+    - Key decisions, rationale, and implementation details.
+    - Task progress and status.
+    - Reusable system patterns.
+    - Project-specific glossary terms and other custom data.
+
+  workspace_id:
+    source_description: |
+      ConPort tools require a `workspace_id`. Derive this from the workspace URI provided in your context (e.g., parse 'file:///path/to/project' to '/path/to/project').
+    fallback: |
+      If the URI is not a local file path or parsing fails, you may need to ask the USER for the absolute path to the workspace.
+
+  interaction_protocol:
+    title: "Strict Adherence Required for ConPort Tool Calls"
+    rules:
+      - "Explain Intent: Before calling any ConPort tool, briefly explain to the USER *why* you are accessing the project memory (e.g., \"I'll check our project's decision log for previous choices on this topic.\")."
+      - "No Tool Names: NEVER mention the specific ConPort tool names (e.g., `get_decisions`) in your conversation with the USER."
+      - "Tool Call Placement: ALL ConPort MCP tool calls (e.g., `use_mcp_tool.../use_mcp_tool`) MUST be placed at the very END of your response message. Do not add any text after the tool call block."
+      - "Wait for Results: If your next action depends on the output of a ConPort tool, ensure you have received and processed the result before proceeding. Your steps can be asynchronous, so explicitly wait if necessary by not requesting new tools until the ConPort result is available."
+
+  proactive_memory_management:
+    logging_guideline: |
+      Actively identify opportunities to log new information (decisions, progress, patterns, glossary terms) into the project memory as it emerges in your conversation with the USER. Confirm with the USER before logging significant new entries or updates if you are inferring the information.
+    updating_guideline: |
+      Keep Product Context and Active Context up-to-date as project goals or current focus shift.
+
+  tool_usage_focus:
+    primary_use: |
+      Use ConPort tools primarily for managing structured, persistent project knowledge.
+    complementary_use: |
+      Utilize your native tools (e.g., `Codebase Search`, `View File`) for direct code interaction and general information retrieval.
+    mcp_server_type: |
+      ConPort is a "tools-only" MCP server. Do not attempt to use MCP `prompts` or `resources` with it.
+
+  initialization_guidance:
+    load_attempt: |
+      When starting in a new workspace, attempt to load existing project memory by calling relevant ConPort `get_*` tools.
+    handling_empty_or_failure: |
+      If loading fails or returns minimal/empty data, inform the USER that the project memory appears uninitialized and ask if they wish to start using it. A new memory bank will be created automatically when information is first saved.
+
+  configuration_reference:
+    server_name_note: |
+      The ConPort server (plugin) is typically named `conport-stdio` (or as configured by the user in `~/.codeium/windsurf/mcp_config.json`).
+    detailed_strategy_note: |
+      For detailed tool argument structures and advanced usage protocols, refer to the `windsurf_conport_strategy.md` document if available, or use the ConPort `get_conport_schema` tool for direct schema retrieval.
+
+  user_driven_memory_sync:
+    trigger_phrase_examples: # For Cascade's understanding of when to initiate this
+      - "Update project memory"
+      - "Synchronize ConPort"
+      - "Review and update our shared context"
+    action_summary: |
+      If the USER requests a general update or synchronization of the project memory (ConPort):
+      1. Acknowledge: Inform the USER you will review the recent conversation and update the project memory accordingly.
+      2. Review Chat: Analyze the current chat session for new information, decisions, progress, context changes, and clarifications that should be logged or updated in ConPort.
+      3. Log/Update Systematically:
+          - Explain to the USER what type of information you are about to save/update (e.g., "I'll log the decision we just made about the database schema.").
+          - Use the appropriate ConPort tools (e.g., `log_decision`, `update_product_context`, `log_custom_data` for glossary terms) one by one, following all standard interaction protocols (explain intent, no tool names, tool call at end).
+          - For `update_product_context` and `update_active_context`, it's often best to first retrieve the current content, then prepare the new full content or a patch, before calling the update tool.
+      4. Summarize: After processing updates, briefly inform the USER that the project memory has been synchronized.
+    example_flow_note: |
+      This process is iterative. You might make several ConPort tool calls sequentially, each in its own turn, to fully capture all relevant updates from the conversation.
