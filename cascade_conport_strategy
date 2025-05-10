@@ -41,28 +41,46 @@ cascade_conport_integration:
       ConPort is a "tools-only" MCP server. Do not attempt to use MCP `prompts` or `resources` with it.
 
   initialization_guidance:
-    load_attempt: |
-      When starting in a new workspace:
+    # This guidance assumes the agent has already determined the `ACTUAL_WORKSPACE_ID`.
+    # It also assumes the agent can check for the existence of the ConPort DB file
+    # (e.g., `ACTUAL_WORKSPACE_ID + "/.context_portal/context.db"`) using its native file system tools.
+
+    on_existing_db_found: |
+      # If an existing ConPort DB is found for the workspace:
       1. **Attempt to load existing project memory:** Call relevant ConPort `get_*` tools (e.g., `get_product_context`, `get_active_context`, `get_recent_activity_summary`).
-      2. **Check for `productBrief.md`:**
-         - Use your file system tools to check if a `productBrief.md` file exists in the root of the current workspace.
-         - If it exists, read its content.
-         - Inform the USER: "I found a `productBrief.md` file in this workspace."
-         - Ask the USER: "Would you like me to import its content into the project's Product Context in ConPort?"
-         - If the USER agrees:
-           - Retrieve the current Product Context using `get_product_context`.
-           - Prepare a patch or new content object (e.g., `{"initial_brief": "[content of productBrief.md]"}`).
-           - Call `update_product_context` with the new data.
-           - Confirm the import result with the USER.
-    handling_empty_or_failure: |
-      - **If `productBrief.md` was NOT found OR the USER declined to import it:**
-        - AND if the initial loading of ConPort data (from `get_*` tools) failed or returned minimal/empty data:
-          - Inform the USER: "The ConPort project memory for this workspace appears uninitialized or is currently empty."
-          - Ask: "Would you like to start building the project memory now? We can begin by defining the Product Context, or I can list files in the workspace to help gather initial information."
-          - (A new memory bank/database will be created automatically by ConPort when information is first saved if it doesn't exist.)
-      - **If `productBrief.md` WAS imported OR existing ConPort data was loaded successfully:**
-        - Inform the USER: "Project memory (ConPort) initialized and relevant contexts are loaded/updated."
-        - Proceed with the user's task, leveraging the loaded/imported context.
+      2. **Analyze loaded data:**
+         - If data is successfully loaded and seems populated: Inform the USER "ConPort project memory loaded."
+         - If data is minimal/empty despite DB existing: Inform USER "ConPort database found, but seems empty. You can start by defining Product Context."
+         - Proceed with user's task, leveraging loaded context.
+
+    on_no_db_found: |
+      # If NO ConPort DB is found for the workspace:
+      1. Inform USER: "No existing ConPort project memory found for this workspace."
+      2. Ask USER: "Would you like to initialize ConPort for this workspace? A new data store will be created automatically when information is first saved." (Provide Yes/No options).
+      3. **If USER agrees to initialize:**
+         - Inform USER: "Okay, ConPort will be set up for this workspace."
+         - **Check for `productBrief.md` (ONLY on this initial setup):**
+           - Use your file system tools to check if `productBrief.md` exists in the workspace root.
+           - If it exists:
+             - Read its content.
+             - Inform USER: "I found a `productBrief.md` file."
+             - Ask USER: "As we're setting up ConPort, would you like to import its content as the initial Product Context?" (Provide Yes/No options).
+             - If USER agrees:
+               - Prepare a content object for Product Context (e.g., `{"initial_brief": "[content of productBrief.md]"}`).
+               - Call ConPort's `update_product_context` (or equivalent operation to set Product Context) with this data.
+               - Confirm import result with USER.
+           - Else (`productBrief.md` not found):
+             - Ask USER: "`productBrief.md` not found. Would you like to define the initial Product Context manually now?" (Provide Yes/No options).
+             - (If Yes, guide user to provide input for `update_product_context`).
+         - Inform USER: "ConPort is ready. You can now start logging decisions, progress, etc."
+      4. **If USER declines to initialize:**
+         - Inform USER: "Okay, ConPort will not be used for this session for this workspace."
+         - (Agent should operate without relying on ConPort for this workspace).
+
+    on_load_or_setup_failure: |
+      # If any ConPort operations fail unexpectedly during the above, or if initial DB check itself fails:
+      Inform USER: "There was an issue initializing or accessing ConPort project memory. Will proceed without it for now."
+      (Agent should operate without relying on ConPort).
 
   configuration_reference:
     server_name_note: |
