@@ -174,7 +174,7 @@ ConPort's effectiveness with LLM agents is significantly enhanced by providing s
 *   **For Windsurf Cascade:**
     *   [`cascade_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/cascade_conport_strategy): Specific guidance for LLMs integrated with the Windsurf Cascade environment.
 *   **For General/Platform-Agnostic Use:**
-    *   [`generic_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/generic_conport_strategy): Provides a platform-agnostic set of instructions for any MCP-capable LLM. It guides the LLM to use ConPort's `get_conport_schema` tool to discover specific ConPort tool names and parameters, and then interact conceptually with ConPort's data types.
+    *   [`generic_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/generic_conport_strategy): Provides a platform-agnostic set of instructions for any MCP-capable LLM. It emphasizes using ConPort's `get_conport_schema` operation to dynamically discover the exact ConPort tool names and their parameters, guiding the LLM on *when* and *why* to perform conceptual interactions (like logging a decision or updating product context) rather than hardcoding specific tool invocation details.
 
 **How to Use These Strategy Files:**
 
