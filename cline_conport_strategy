@@ -34,17 +34,40 @@ conport_memory_strategy:
     #    Invoke `get_custom_data` (category: "critical_settings")... Store result.
     #    Invoke `get_custom_data` (category: "ProjectGlossary")... Store result.
     #    Invoke `get_recent_activity_summary` (default params, e.g., last 24h, limit 3 per type) for a quick catch-up. Store result.
-    # 2. Analyze loaded context:
-    #    IF results from step 1 are NOT empty/minimal:
+    # 2. Attempt to bootstrap Product Context from productBrief.md:
+    #    <thinking>
+    #    - Need `ACTUAL_WORKSPACE_ID` (determined in 'initialization' phase).
+    #    - Will check for productBrief.md and offer import.
+    #    </thinking>
+    #    Invoke `list_files` with `path: ACTUAL_WORKSPACE_ID` (non-recursive, just to check root).
+    #    Analyze `list_files` result:
+    #    IF 'productBrief.md' is found in the listing:
+    #        Invoke `read_file` for `ACTUAL_WORKSPACE_ID + "/productBrief.md"`.
+    #        Use `ask_followup_question`: "Found productBrief.md in your workspace. Would you like to import its content into the Product Context?"
+    #        Suggestions: "Yes, import its content now.", "No, skip importing it for now."
+    #        IF user confirms "Yes":
+    #            Invoke `get_product_context` (to ensure we have the latest version of product context, if any).
+    #            Prepare `patch_content` for `update_product_context`. For example: `{"initial_product_brief": "[content from productBrief.md]"}`.
+    #            (Alternatively, if productBrief.md is structured JSON/YAML, parse and merge more intelligently).
+    #            Invoke `update_product_context` with the prepared content.
+    #            Inform user of the import result (success or failure).
+    #    ELSE ('productBrief.md' NOT found):
+    #        Use `ask_followup_question`: "`productBrief.md` was not found in the workspace root. Would you like to define the Product Context manually now, or perhaps list other files to help gather information?"
+    #        Suggestions: "Define Product Context manually.", "List files in workspace root.", "Skip for now."
+    #        (If "List files", then `list_files` for `ACTUAL_WORKSPACE_ID`, then another `ask_followup_question` based on results to guide Product Context definition).
+
+    # 3. Analyze loaded context (potentially updated by step 2):
+    #    IF results from step 1 (and potentially step 2's import) are NOT empty/minimal:
     #        Set internal status to [CONPORT_MEMORY: ACTIVE].
     #        Inform user: "ConPort memory initialized. Existing contexts and recent activity loaded."
     #        Use `ask_followup_question` with suggestions like "Review recent activity?", "Continue previous task?", "What would you like to work on?".
-    #    ELSE (loaded context is empty/minimal despite DB file existing):
+    #    ELSE (loaded context is still empty/minimal despite DB file existing and no productBrief import):
     #        Set internal status to [CONPORT_MEMORY: ACTIVE].
     #        Inform user: "ConPort database file found, but it appears to be empty or minimally initialized. You can start by defining Product/Active Context or logging project information."
     #        Use `ask_followup_question` with suggestions like "Define Product Context?", "Log a new decision?".
-    # 3. Handle Load Failure:
-    #    If any `get_*` calls failed unexpectedly, fall back to `if_conport_unavailable_or_init_failed`.
+
+    # 4. Handle Load Failure (if step 1's `get_*` calls failed):
+    #    If any `get_*` calls in step 1 failed unexpectedly, fall back to `if_conport_unavailable_or_init_failed`.
 
   handle_new_conport_setup: | # New sequence
     <thinking>

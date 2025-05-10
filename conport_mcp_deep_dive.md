@@ -16,7 +16,6 @@ The Context Portal (ConPort) MCP server is designed to manage and provide struct
 *   **Workspace-Specific Context:** All data managed by ConPort is tied to a `workspace_id` (typically the absolute path to a project directory). This ensures that context remains relevant to the specific project being worked on.
 *   **Dual Communication Modes:** The server can operate in two modes:
     *   **STDIO (Standard Input/Output):** For direct, local communication with an MCP client (e.g., an IDE extension like Roo Code). This mode is efficient for local inter-process communication.
-    *   **HTTP:** The server can also run as an HTTP service (using Uvicorn as the ASGI server), exposing its MCP tools via an HTTP endpoint (typically `/mcp`). This allows for broader accessibility if needed.
 *   **Structured Data Management:** ConPort defines several core data entities (see Section 2) to structure project knowledge, such as decisions, progress, system patterns, and custom data.
 *   **Tool-Based Interaction:** AI assistants interact with ConPort by calling its defined MCP tools, each designed for a specific operation (e.g., logging a decision, retrieving active context).
 ## 2. Core Data Entities & Database Schema
@@ -355,19 +354,7 @@ The server code is primarily located within the `src/context_portal_mcp/` direct
 
 ### 4.2 Running the Server
 
-The server can be run in two primary modes:
-
-*   **HTTP Mode:**
-    *   Typically launched using Uvicorn, which serves the FastAPI application.
-    *   The `FastMCP` instance is mounted onto the FastAPI app at the `/mcp` endpoint.
-    *   Command (from project root, assuming dependencies installed):
-        ```bash
-        uvicorn src.context_portal_mcp.main:app --host 127.0.0.1 --port 8000
-        ```
-    *   Or using the CLI entry point defined in `pyproject.toml` (e.g., `conport-server --mode http --port 8000`).
-*   **STDIO Mode:**
-    *   Intended for direct use by local MCP clients (like IDE extensions).
-    *   The `FastMCP` library handles the STDIO communication transport.
+The server is primarily run in **STDIO Mode**. This mode is intended for direct use by local MCP clients (like IDE extensions), and the `FastMCP` library handles the STDIO communication transport.
     *   Command (from project root):
         ```bash
         python src/context_portal_mcp/main.py --mode stdio --workspace_id "/path/to/your/workspace"
@@ -381,7 +368,6 @@ The server can be run in two primary modes:
 ### 4.3 Dependencies
 Key Python dependencies are managed via `requirements.txt` (or would be in a `pyproject.toml` if using Poetry/PDM). These include:
 *   `fastapi`: For the web server framework.
-*   `uvicorn[standard]`: As the ASGI server to run FastAPI.
 *   `pydantic`: For data validation and settings management.
 *   `mcp[cli]` (or `mcp.py`): The Model Context Protocol SDK, specifically `FastMCP` for server implementation.
 *   `sqlite3` is part of the Python standard library.
@@ -418,7 +404,7 @@ While the ConPort server provides a robust set of features for managing project 
 2.  **Collaboration Features (if shifting to a multi-user model):**
     *   User identification for logged items.
     *   Permissions and access control if data is shared.
-    *   Real-time updates/notifications (potentially using SSE as discussed previously) if multiple users interact with the same ConPort instance.
+    *   Real-time updates/notifications if a multi-user model were adopted for the same ConPort instance.
 
 3.  **Richer Data Types for Custom Data:**
     *   While `value` in `custom_data` is `Any` (JSON serializable), providing explicit support or validation for common structured types (e.g., lists of specific objects, typed dictionaries) could be beneficial.
@@ -432,7 +418,6 @@ While the ConPort server provides a robust set of features for managing project 
 
 6.  **Configuration & Usability:**
     *   Explore more dynamic ways to manage `workspace_id` or allow aliasing for long workspace paths.
-    *   If an HTTP version becomes more prominent, robust authentication and security measures are paramount.
 
 7.  **Integration with Other Developer Tools:**
     *   Direct integration with issue trackers, version control systems (beyond simple linking), or CI/CD pipelines to automatically log context or make it available.

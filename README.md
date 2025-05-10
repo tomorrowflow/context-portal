@@ -4,16 +4,16 @@ A database-backed Model Context Protocol (MCP) server for managing structured pr
 
 ## Overview
 
-This project is the **Context Portal MCP server (ConPort)**. ConPort provides a robu nst and structured way for AI assistants to store, retrieve, and manage various types of project context (e.g., product goals, active tasks, decisions, progress, architectural patterns, custom data) via a dedicated MCP server.
+This project is the **Context Portal MCP server (ConPort)**. ConPort provides a robust and structured way for AI assistants to store, retrieve, and manage various types of project context (e.g., product goals, active tasks, decisions, progress, architectural patterns, custom data) via a dedicated MCP server.
 
-It can replace older file-based context management systems by offering a more reliable and queryable database backend (SQLite per workspace). ConPort is designed to be a generic context backend, compatible with various IDEs and client interfaces that support MCP.
+It replaces older file-based context management systems by offering a more reliable and queryable database backend (SQLite per workspace). ConPort is designed to be a generic context backend, compatible with various IDEs and client interfaces that support MCP.
 
 Key features include:
-*   Structured context storage using SQLite (one DB per workspace).
+*   Structured context storage using SQLite (one DB per workspace, automatically created).
 *   MCP server (`context_portal_mcp`) built with Python/FastAPI.
-*   Defined MCP tools for interaction (e.g., `log_decision`, `get_active_context`).
+*   A comprehensive suite of defined MCP tools for interaction (see "Available ConPort Tools" below).
 *   Multi-workspace support via `workspace_id`.
-*   Deployment mode: Stdio.
+*   Primary deployment mode: STDIO for tight IDE integration.
 
 ## Prerequisites
 
@@ -24,219 +24,239 @@ Before you begin, ensure you have the following installed:
 *   **Python:** Version 3.8 or higher is recommended.
     *   [Download Python](https://www.python.org/downloads/)
     *   Ensure Python is added to your system's PATH during installation (especially on Windows).
-*   **uv:** (Recommended) A fast Python environment and package manager. Using `uv` simplifies virtual environment creation and dependency installation.
+*   **uv:** (Highly Recommended) A fast Python environment and package manager. Using `uv` significantly simplifies virtual environment creation and dependency installation.
     *   [Install uv](https://github.com/astral-sh/uv#installation)
-    *   If you prefer not to use `uv`, you can use standard Python `venv` and `pip`.
+    *   If you choose not to use `uv`, you can use standard Python `venv` and `pip`, but `uv` is preferred for this project.
 
 ## Installation from Git Repository
 
-These instructions guide you through setting up ConPort by cloning its Git repository and installing dependencies. It's highly recommended to use a virtual environment to manage project dependencies and avoid conflicts with system Python packages.
+These instructions guide you through setting up ConPort by cloning its Git repository and installing dependencies. Using a virtual environment is crucial.
 
 1.  **Clone the Repository:**
-    Open your terminal or command prompt and run the following command, replacing `context-portal.git` with the actual repository URL if necessary (e.g., if you've forked it).
+    Open your terminal or command prompt and run:
     ```bash
-    git clone https://github.com/context-portal/context-portal.git
+    git clone https://github.com/GreatScottyMac/context-portal.git
     cd context-portal
     ```
 
 2.  **Create and Activate a Virtual Environment:**
 
-    Using a virtual environment isolates the project's Python dependencies from your system's Python installation.
-
     *   **Using `uv` (recommended):**
-
+        In the `context-portal` directory:
         ```bash
         uv venv
         ```
         *   **Activate the environment:**
-            *   **Linux/macOS:**
+            *   **Linux/macOS (bash/zsh):**
                 ```bash
                 source .venv/bin/activate
                 ```
-            *   **Windows Command Prompt:**
+            *   **Windows (Command Prompt):**
                 ```cmd
                 .venv\Scripts\activate.bat
                 ```
-            *   **Windows PowerShell:**
+            *   **Windows (PowerShell):**
                 ```powershell
                 .venv\Scripts\Activate.ps1
                 ```
+                (If you encounter execution policy issues in PowerShell, you might need to run `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` first.)
 
-    *   **Using standard `venv`:**
-
+    *   **Using standard `venv` (if not using `uv`):**
+        In the `context-portal` directory:
         ```bash
-        python3 -m venv .venv  # On some systems, use 'python -m venv .venv'
+        python3 -m venv .venv  # Or 'python -m venv .venv'
         ```
-        *   **Activate the environment:**
-            *   **Linux/macOS:**
-                ```bash
-                source .venv/bin/activate
-                ```
-            *   **Windows Command Prompt:**
-                ```cmd
-                .venv\Scripts\activate.bat
-                ```
-            *   **Windows PowerShell:**
-                ```powershell
-                .venv\Scripts\Activate.ps1
-                ```
+        *   Activation commands are the same as for `uv` above.
 
 3.  **Install Dependencies:**
-
-    With your virtual environment activated, install the project dependencies listed in `requirements.txt`.
+    With your virtual environment activated:
 
     *   **Using `uv` (recommended):**
         ```bash
         uv pip install -r requirements.txt
         ```
-        *   **Note:** When using `uv`, activating the virtual environment (`source .venv/bin/activate` etc.) is not strictly necessary before running `uv pip install` if you are in the directory where the `.venv` was created. `uv` will automatically detect and use it. However, activation *is* required if you plan to run the server script directly using `python src/context_portal_mcp/main.py` instead of `uv run python ...`.
-    *   **Using standard `pip` (if you used `venv`):**
+        *Note: `uv` can often detect and use the `.venv` in the current directory even without explicit activation for `uv pip install` commands. However, activation is still good practice, especially if you intend to run Python scripts directly.*
+
+    *   **Using standard `pip`:**
         ```bash
         pip install -r requirements.txt
         ```
 
 4.  **Verify Installation (Optional):**
-
-    You can check if the main script is accessible and prints help information. Ensure your virtual environment is activated.
-
-    *   **If you used `uv`:**
+    Ensure your virtual environment is activated.
+    *   **Using `uv`:**
         ```bash
         uv run python src/context_portal_mcp/main.py --help
         ```
-    *   **If you used standard `venv`:**
+    *   **Using standard `python`:**
         ```bash
         python src/context_portal_mcp/main.py --help
         ```
-    This command should output the command-line help for the ConPort server.
+    This should output the command-line help for the ConPort server.
 
-## Running the ConPort Server
+## Running the ConPort Server (STDIO Mode)
 
-The ConPort server is primarily designed to be run in STDIO mode for IDE integration.
-
-### STDIO Mode (Recommended for IDE Integration)
-
-This mode is ideal for tight integration with an IDE (like VS Code or Roo Code), where the IDE spawns and manages the server process for the current workspace.
+STDIO mode is recommended for IDE integration, allowing the IDE to manage the server process for the current workspace.
 
 *   **Command Structure:**
-
+    The IDE will typically construct and run a command similar to this:
     ```bash
-    <python_runner> src/context_portal_mcp/main.py --mode stdio --workspace_id "/actual/path/to/your/project_workspace"
+    uv run python /path/to/your/context-portal/src/context_portal_mcp/main.py --mode stdio --workspace_id "/actual/path/to/your/project_workspace"
     ```
-    *   Replace `<python_runner>` with:
-        *   `uv run python` if you installed dependencies using `uv`.
-        *   `python` if you installed dependencies using standard `venv` and `pip` (ensure your virtual environment is activated).
-    *   Replace `"/actual/path/to/your/project_workspace"` with the absolute path to the root of the workspace whose context you want ConPort to manage. The IDE typically provides this path dynamically (e.g., via a variable like `${workspaceFolder}`).
-    *   ConPort will create/use a database file at `your_project_workspace/.context_portal/data.sqlite`.
+    *   `/path/to/your/context-portal/` is the absolute path where you cloned the `context-portal` repository.
+    *   `"/actual/path/to/your/project_workspace"` is the absolute path to the root of the project whose context ConPort will manage (e.g., `${workspaceFolder}` in VS Code).
+    *   ConPort automatically creates its database at `your_project_workspace/.context_portal/context.db`.
 
-## Client Configuration
+## Client Configuration (STDIO Mode)
 
-MCP clients (like IDE extensions or other tools) need to be configured to connect to a running ConPort instance.
+Configure your MCP client (e.g., IDE extension) to connect to ConPort. This example is for a VS Code-like `mcp.json` or user-level MCP settings.
 
-### For STDIO Mode (e.g., in a workspace `.vscode/mcp.json` or the IDE's user-level MCP settings)
-
-**Note:** Whether you configure ConPort in a workspace-specific file or your IDE's user-level (global) MCP settings, the `command`, `args` (specifically the path to `main.py`), and `cwd` parameters in the configuration below MUST always point to the location where YOU cloned the `context-portal` repository.
-This tells the IDE how to launch the ConPort server for the current workspace.
+**Crucial:** The `command` and `args` (specifically the path to `main.py`), and the `cwd` parameter in the configuration below **MUST** point to the location where **YOU** cloned the `context-portal` repository.
 
 ```json
 {
   "mcpServers": {
     "conport-stdio": {
-      "command": "/path/to/your/context-portal/.venv/bin/python",
+      "command": "uv",
       "args": [
-        "/path/to/your/context-portal/src/context_portal_mcp/main.py",
+        "run",
+        "python",
+        "src/context_portal_mcp/main.py",
         "--mode",
         "stdio",
         "--workspace_id",
         "${workspaceFolder}"
-      ] 
+      ],
+      "cwd": "/path/to/your/cloned/context-portal"
     }
   }
 }
 ```
-*   **Important:**
-    *   Replace `/path/to/your/context-portal-mcp-repo` in both the `args` (for `main.py`) and the `cwd` parameter with the **absolute path** to the directory where you cloned this `context-portal` repository.
-    *   For example, if you cloned it into `/home/user/projects/context-portal`, then the `main.py` path would be `/home/user/projects/context-portal/src/context_portal_mcp/main.py` and `cwd` would be `/home/user/projects/context-portal`.
-*   `${workspaceFolder}` is a common IDE variable (like in VS Code or Roo Code) that represents the absolute path to the root of the project workspace the user currently has open. ConPort will manage context for *this* workspace.
 
-## Usage with LLM Agents (via `conport_memory_strategy.yml`)
+*   **Replace `/path/to/your/cloned/context-portal`** in the `cwd` field with the **absolute path** to the directory where you cloned the `context-portal` repository.
+    *   For example, if you cloned it into `/home/user/projects/context-portal`, then `cwd` would be `/home/user/projects/context-portal`.
+*   The path to `main.py` within `args` is now relative to this `cwd`.
+*   `${workspaceFolder}` is a common IDE variable representing the current project's root path.
+*   **Windows Example Path:** If you cloned `context-portal` to `C:\Users\YourUser\Projects\context-portal`, the `cwd` in the JSON would be `"C:\\Users\\YourUser\\Projects\\context-portal"`. Remember to escape backslashes.
 
-The `conport_memory_strategy.yml` file in this repository is designed to be used as **custom instructions or a system prompt** for an LLM agent that is connected to the ConPort MCP server.
+### Full Windows Configuration Example:
 
-**Purpose of `conport_memory_strategy.yml`:**
+If your `context-portal` repository is cloned to `C:\Users\YourUser\Projects\context-portal`, your configuration would look like this:
 
-This file provides the LLM agent with the necessary guidance to effectively interact with the ConPort server and manage project context. It includes instructions on:
+```json
+{
+  "mcpServers": {
+    "conport-stdio": {
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "src/context_portal_mcp/main.py",
+        "--mode",
+        "stdio",
+        "--workspace_id",
+        "${workspaceFolder}"
+      ],
+      "cwd": "C:\\Users\\YourUser\\Projects\\context-portal"
+    }
+  }
+}
+```
 
-*   **Initialization:** How the agent should load existing context from ConPort at the start of a session using the `get_*` tools.
-*   **Context Updates:** When and how the agent should use the `log_*` and `update_*` tools to save new information, decisions, and progress to ConPort throughout a session.
-*   **Custom Data Management:** How to store, retrieve, and delete project-specific custom data using the `log_custom_data`, `get_custom_data`, and `delete_custom_data` tools.
-*   **Triggers:** Specific events or user commands that should prompt the agent to update the ConPort memory.
-*   **Workspace Identification:** The critical importance of using the correct `workspace_id` for all ConPort tool calls to ensure context is managed for the active project.
+## Usage with LLM Agents (Custom Instructions)
 
-**How to Use `conport_memory_strategy.yml`:**
+ConPort's effectiveness with LLM agents is significantly enhanced by providing specific custom instructions or system prompts to the LLM. This repository includes tailored strategy files for different environments:
 
-To enable your LLM agent to utilize ConPort for structured project memory, you need to **copy the entire content** of the `conport_memory_strategy.yml` file and add it to your LLM's custom instructions or system prompt area.
+*   **For Roo Code IDE:**
+    *   [`roo_code_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/roo_code_conport_strategy): Contains detailed instructions for LLMs operating within the Roo Code IDE, guiding them on how to use ConPort tools for context management.
+*   **For CLine (Command Line Interface):**
+    *   [`cline_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/cline_conport_strategy): Instructions optimized for LLMs interacting via a command-line interface that supports ConPort.
+*   **For Windsurf Cascade:**
+    *   [`cascade_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/cascade_conport_strategy): Specific guidance for LLMs integrated with the Windsurf Cascade environment.
 
-The exact method for adding custom instructions varies depending on the LLM interface or platform you are using (e.g., a specific IDE extension, a web-based chat interface, or an API configuration). Consult the documentation for your specific LLM interface to find where to add these instructions.
+**How to Use These Strategy Files:**
 
-By providing these instructions to your LLM, you equip it with the "knowledge" of how to leverage the ConPort server's capabilities for persistent and structured project context management, leading to more informed and consistent assistance across sessions and tasks.
+1.  Identify the strategy file relevant to your LLM agent's environment.
+2.  Copy the **entire content** of that file.
+3.  Paste it into your LLM's custom instructions or system prompt area. The method varies by LLM platform (IDE extension settings, web UI, API configuration).
 
-The `workspace_id` is crucial for all ConPort tool interactions to ensure the agent is working with the correct project's data.
+These instructions equip the LLM with the knowledge to:
+*   Initialize and load context from ConPort.
+*   Update ConPort with new information (decisions, progress, etc.).
+*   Manage custom data and relationships.
+*   Understand the importance of `workspace_id`.
 
 ## Available ConPort Tools
 
 The ConPort server exposes the following tools via MCP. All tools require a `workspace_id` argument (string, required) to specify the target project workspace.
 
-*   **`get_product_context`**
-    *   Description: Retrieves the overall project context from ConPort (Context Portal).
-    *   Arguments: `workspace_id` (string, required).
-*   **`update_product_context`**
-    *   Description: Updates the overall project context in ConPort (Context Portal).
-    *   Arguments: `workspace_id` (string, required), `content` (object, required - a JSON object representing the new product context).
-*   **`get_active_context`**
-    *   Description: Retrieves the current working context (focus, recent changes, issues) from ConPort.
-    *   Arguments: `workspace_id` (string, required).
-*   **`update_active_context`**
-    *   Description: Updates the current working context in ConPort.
-    *   Arguments: `workspace_id` (string, required), `content` (object, required - a JSON object for the active context).
-*   **`log_decision`**
-    *   Description: Logs an architectural or implementation decision to ConPort.
-    *   Arguments: `workspace_id` (string, required), `summary` (string, required), `rationale` (string, optional), `implementation_details` (string, optional).
-*   **`get_decisions`**
-    *   Description: Retrieves logged decisions from ConPort, optionally limited.
-    *   Arguments: `workspace_id` (string, required), `limit` (integer, optional).
-*   **`log_progress`**
-    *   Description: Logs a progress entry or task status to ConPort.
-    *   Arguments: `workspace_id` (string, required), `status` (string, required), `description` (string, required), `parent_id` (integer, optional).
-*   **`get_progress`**
-    *   Description: Retrieves progress entries from ConPort, optionally filtered.
-    *   Arguments: `workspace_id` (string, required), `status_filter` (string, optional), `parent_id_filter` (integer, optional), `limit` (integer, optional).
-*   **`log_system_pattern`**
-    *   Description: Logs or updates a system/coding pattern used in the project to ConPort.
-    *   Arguments: `workspace_id` (string, required), `name` (string, required), `description` (string, optional).
-*   **`get_system_patterns`**
-    *   Description: Retrieves all logged system patterns from ConPort.
-    *   Arguments: `workspace_id` (string, required).
-*   **`log_custom_data`**
-    *   Description: Stores or updates a custom key-value data entry under a category in ConPort.
-    *   Arguments: `workspace_id` (string, required), `category` (string, required), `key` (string, required), `value` (any JSON-serializable type, required).
-*   **`get_custom_data`**
-    *   Description: Retrieves custom data entries from ConPort, optionally filtered by category/key.
-    *   Arguments: `workspace_id` (string, required), `category` (string, optional), `key` (string, optional).
-*   **`delete_custom_data`**
-    *   Description: Deletes a specific custom data entry from ConPort.
-    *   Arguments: `workspace_id` (string, required), `category` (string, required), `key` (string, required).
-*   **`export_conport_to_markdown`**
-    *   Description: Exports all ConPort data for a workspace to markdown files in a specified output directory (defaults to './conport_export/' relative to the workspace).
-    *   Arguments: `workspace_id` (string, required), `output_path` (string, optional - e.g., "my_conport_backup").
-*   **`import_markdown_to_conport`**
-    *   Description: Imports data from markdown files (typically those generated by `export_conport_to_markdown`) back into the ConPort database for a workspace.
-    *   Import Strategy:
-        *   Product Context & Active Context: Overwrites existing data.
-        *   Decisions, Progress Entries, System Patterns: Adds entries from markdown as new records (may create duplicates if items already exist).
-        *   Custom Data: Upserts entries (updates existing category/key pairs, inserts new ones).
-        *   Deletions: Does not automatically delete items from the database if they are missing from markdown.
-    *   Arguments: `workspace_id` (string, required), `input_path` (string, optional - e.g., "my_conport_backup", defaults to './conport_export/').
+*   **Product Context Management:**
+    *   `get_product_context`: Retrieves the overall project goals, features, and architecture.
+    *   `update_product_context`: Updates the product context. Accepts full `content` (object) or `patch_content` (object) for partial updates (use `__DELETE__` as a value in patch to remove a key).
+*   **Active Context Management:**
+    *   `get_active_context`: Retrieves the current working focus, recent changes, and open issues.
+    *   `update_active_context`: Updates the active context. Accepts full `content` (object) or `patch_content` (object).
+*   **Decision Logging:**
+    *   `log_decision`: Logs an architectural or implementation decision.
+        *   Args: `summary` (str, req), `rationale` (str, opt), `implementation_details` (str, opt), `tags` (list[str], opt).
+    *   `get_decisions`: Retrieves logged decisions.
+        *   Args: `limit` (int, opt), `tags_filter_include_all` (list[str], opt), `tags_filter_include_any` (list[str], opt).
+    *   `search_decisions_fts`: Full-text search across decision fields (summary, rationale, details, tags).
+        *   Args: `query_term` (str, req), `limit` (int, opt).
+    *   `delete_decision_by_id`: Deletes a decision by its ID.
+        *   Args: `decision_id` (int, req).
+*   **Progress Tracking:**
+    *   `log_progress`: Logs a progress entry or task status.
+        *   Args: `status` (str, req), `description` (str, req), `parent_id` (int, opt), `linked_item_type` (str, opt), `linked_item_id` (str, opt).
+    *   `get_progress`: Retrieves progress entries.
+        *   Args: `status_filter` (str, opt), `parent_id_filter` (int, opt), `limit` (int, opt).
+*   **System Pattern Management:**
+    *   `log_system_pattern`: Logs or updates a system/coding pattern.
+        *   Args: `name` (str, req), `description` (str, opt), `tags` (list[str], opt).
+    *   `get_system_patterns`: Retrieves system patterns.
+        *   Args: `tags_filter_include_all` (list[str], opt), `tags_filter_include_any` (list[str], opt).
+    *   `delete_system_pattern_by_id`: Deletes a system pattern by its ID.
+        *   Args: `pattern_id` (int, req).
+*   **Custom Data Management:**
+    *   `log_custom_data`: Stores/updates a custom key-value entry under a category. Value is JSON-serializable.
+        *   Args: `category` (str, req), `key` (str, req), `value` (any, req).
+    *   `get_custom_data`: Retrieves custom data.
+        *   Args: `category` (str, opt), `key` (str, opt).
+    *   `delete_custom_data`: Deletes a specific custom data entry.
+        *   Args: `category` (str, req), `key` (str, req).
+    *   `search_project_glossary_fts`: Full-text search within the 'ProjectGlossary' custom data category.
+        *   Args: `query_term` (str, req), `limit` (int, opt).
+    *   `search_custom_data_value_fts`: Full-text search across all custom data values, categories, and keys.
+        *   Args: `query_term` (str, req), `category_filter` (str, opt), `limit` (int, opt).
+*   **Context Linking:**
+    *   `link_conport_items`: Creates a relationship link between two ConPort items.
+        *   Args: `source_item_type` (str, req), `source_item_id` (str, req), `target_item_type` (str, req), `target_item_id` (str, req), `relationship_type` (str, req), `description` (str, opt).
+    *   `get_linked_items`: Retrieves items linked to a specific item.
+        *   Args: `item_type` (str, req), `item_id` (str, req), `relationship_type_filter` (str, opt), `linked_item_type_filter` (str, opt), `limit` (int, opt).
+*   **History & Meta Tools:**
+    *   `get_item_history`: Retrieves version history for Product or Active Context.
+        *   Args: `item_type` ("product_context" | "active_context", req), `version` (int, opt), `before_timestamp` (datetime, opt), `after_timestamp` (datetime, opt), `limit` (int, opt).
+    *   `get_recent_activity_summary`: Provides a summary of recent ConPort activity.
+        *   Args: `hours_ago` (int, opt), `since_timestamp` (datetime, opt), `limit_per_type` (int, opt, default: 5).
+    *   `get_conport_schema`: Retrieves the schema of available ConPort tools and their arguments.
+*   **Import/Export:**
+    *   `export_conport_to_markdown`: Exports ConPort data to markdown files.
+        *   Args: `output_path` (str, opt, default: "./conport_export/").
+    *   `import_markdown_to_conport`: Imports data from markdown files into ConPort.
+        *   Args: `input_path` (str, opt, default: "./conport_export/").
+*   **Batch Operations:**
+    *   `batch_log_items`: Logs multiple items of the same type (e.g., decisions, progress entries) in a single call.
+        *   Args: `item_type` (str, req - e.g., "decision", "progress_entry"), `items` (list[dict], req - list of Pydantic model dicts for the item type).
 
-## Architecture
+## Further Reading
 
-The ConPort server is built using Python with FastAPI and utilizes a SQLite database (one per workspace) for persistent storage. Key architectural decisions and schema details were developed during its design phase and are managed internally by the server's database models and MCP tool handlers. For more insight into MCP concepts, refer to the `mcp-reference/` directory.
+For a more in-depth understanding of ConPort's design, architecture, and advanced usage patterns, please refer to:
+*   [`conport_mcp_deep_dive.md`](https://github.com/GreatScottyMac/context-portal/blob/main/conport_mcp_deep_dive.md)
+
+## Contributing
+
+Details on contributing to the ConPort project will be added here in the future.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

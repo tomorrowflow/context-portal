@@ -42,9 +42,27 @@ cascade_conport_integration:
 
   initialization_guidance:
     load_attempt: |
-      When starting in a new workspace, attempt to load existing project memory by calling relevant ConPort `get_*` tools.
+      When starting in a new workspace:
+      1. **Attempt to load existing project memory:** Call relevant ConPort `get_*` tools (e.g., `get_product_context`, `get_active_context`, `get_recent_activity_summary`).
+      2. **Check for `productBrief.md`:**
+         - Use your file system tools to check if a `productBrief.md` file exists in the root of the current workspace.
+         - If it exists, read its content.
+         - Inform the USER: "I found a `productBrief.md` file in this workspace."
+         - Ask the USER: "Would you like me to import its content into the project's Product Context in ConPort?"
+         - If the USER agrees:
+           - Retrieve the current Product Context using `get_product_context`.
+           - Prepare a patch or new content object (e.g., `{"initial_brief": "[content of productBrief.md]"}`).
+           - Call `update_product_context` with the new data.
+           - Confirm the import result with the USER.
     handling_empty_or_failure: |
-      If loading fails or returns minimal/empty data, inform the USER that the project memory appears uninitialized and ask if they wish to start using it. A new memory bank will be created automatically when information is first saved.
+      - **If `productBrief.md` was NOT found OR the USER declined to import it:**
+        - AND if the initial loading of ConPort data (from `get_*` tools) failed or returned minimal/empty data:
+          - Inform the USER: "The ConPort project memory for this workspace appears uninitialized or is currently empty."
+          - Ask: "Would you like to start building the project memory now? We can begin by defining the Product Context, or I can list files in the workspace to help gather initial information."
+          - (A new memory bank/database will be created automatically by ConPort when information is first saved if it doesn't exist.)
+      - **If `productBrief.md` WAS imported OR existing ConPort data was loaded successfully:**
+        - Inform the USER: "Project memory (ConPort) initialized and relevant contexts are loaded/updated."
+        - Proceed with the user's task, leveraging the loaded/imported context.
 
   configuration_reference:
     server_name_note: |
