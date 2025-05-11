@@ -113,7 +113,7 @@ The ConPort server exposes the following MCP tools. All tools require a `workspa
 *   **Arguments:**
     *   `workspace_id` (string): Identifier for the workspace (e.g., absolute path) (Required: Yes)
     *   `content` (object, optional): The full new context content as a dictionary. Overwrites existing. (Default: null)
-    *   `patch_content` (object, optional): A dictionary of changes to apply to the existing context (add/update keys). (Default: null)
+    *   `patch_content` (object, optional): A dictionary of changes to apply (add/update keys). Use a value of `\"__DELETE__\"` to remove a key. (Default: null)
 *   **Pydantic Model:** `UpdateContextArgs`
 
 ### 3.2 Active Context Tools
@@ -129,7 +129,7 @@ The ConPort server exposes the following MCP tools. All tools require a `workspa
 *   **Arguments:**
     *   `workspace_id` (string): Identifier for the workspace (e.g., absolute path) (Required: Yes)
     *   `content` (object, optional): The full new context content as a dictionary. Overwrites existing. (Default: null)
-    *   `patch_content` (object, optional): A dictionary of changes to apply to the existing context (add/update keys). (Default: null)
+    *   `patch_content` (object, optional): A dictionary of changes to apply (add/update keys). Use a value of `\"__DELETE__\"` to remove a key. (Default: null)
 *   **Pydantic Model:** `UpdateContextArgs`
 
 ### 3.3 Decision Logging Tools
@@ -179,7 +179,7 @@ The ConPort server exposes the following MCP tools. All tools require a `workspa
     *   `parent_id` (integer, optional): ID of the parent task, if this is a subtask (Default: null)
     *   `linked_item_type` (string, optional): Optional: Type of the ConPort item this progress entry is linked to (e.g., 'decision', 'system_pattern') (Default: null)
     *   `linked_item_id` (string, optional): Optional: ID/key of the ConPort item this progress entry is linked to (requires linked_item_type) (Default: null)
-    *   `link_relationship_type` (string): Relationship type for the automatic link (Default: "relates_to_progress")
+    *   <!-- `link_relationship_type` (string, optional): Relationship type for the automatic link if `linked_item_type` and `linked_item_id` are provided (e.g., "tracks_decision"). (Default: null, or a server-defined default like "relates_to_progress" if applicable when linking) -->
 *   **Pydantic Model:** `LogProgressArgs`
 
 #### 3.4.2 `get_progress`
@@ -425,13 +425,19 @@ While the ConPort server provides a robust set of features for managing project 
 6.  **Configuration & Usability:**
     *   Explore more dynamic ways to manage `workspace_id` or allow aliasing for long workspace paths.
 
-7.  **Integration with Other Developer Tools:**
+7.  **Alternative Communication Modes (SSE/HTTP):**
+    *   While STDIO is primary for local IDE integration, developing an alternative HTTP-based communication mode (potentially using Server-Sent Events for streaming if applicable) could broaden ConPort's accessibility to web-based clients or other tools that prefer HTTP over STDIO. This would leverage the existing FastAPI framework.
+
+8.  **Flexible Database Storage & Identification:**
+    *   Building upon the 'Configuration & Usability' point for `workspace_id`, implement the 'Flexible Database Storage (DatabaseID)' model (Decision ID 52). This would allow users to store ConPort databases in locations outside the workspace root (e.g., a centralized local directory or true remote storage). It involves assigning a unique `DatabaseID` to each workspace's context, which clients use for identification, while the ConPort server maps this ID to the actual database location and connection details. The local workspace path would still be relevant for resolving file references within the context data.
+
+9.  **Integration with Other Developer Tools:**
     *   Direct integration with issue trackers, version control systems (beyond simple linking), or CI/CD pipelines to automatically log context or make it available.
 
-8.  **Backup and Restore Enhancements:**
+10. **Backup and Restore Enhancements:**
     *   While Markdown export/import exists, more robust backup/restore mechanisms (e.g., direct SQLite backup/restore tools, cloud synchronization options) could be considered for critical data.
 
-9.  **Schema Evolution and Migration:**
+11. **Schema Evolution and Migration:**
     *   The current `ALTER TABLE` approach for adding columns is basic. A more formal database migration system (like Alembic) might be needed if the schema undergoes frequent or complex changes.
 
 These considerations depend on the evolving goals and use cases for the ConPort server. The current architecture provides a solid foundation for many of these potential enhancements.

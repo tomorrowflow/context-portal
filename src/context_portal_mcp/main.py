@@ -3,6 +3,7 @@ import uvicorn
 from fastapi import FastAPI
 import logging
 import argparse
+import os
 from typing import Dict, Any, Optional, AsyncIterator, List # Added AsyncIterator and List
 from contextlib import asynccontextmanager # Added
 
@@ -680,6 +681,10 @@ async def read_root():
 # The run_stdio_mode() might be replaced by conport_mcp.run(transport="stdio") if needed.
 sys.stderr.write(f"MAIN.PY: Value of __name__ is: '{__name__}'\\n"); sys.stderr.flush() # Simplified prefix
 
+# Determine the absolute path to the root of the ConPort server project
+# Assumes this script (main.py) is at src/context_portal_mcp/main.py
+CONPORT_SERVER_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+log.info(f"ConPort Server Root Directory identified as: {CONPORT_SERVER_ROOT_DIR}")
 def main_logic(sys_args=None):
     """
     Configures and runs the ConPort server (HTTP mode via Uvicorn).
@@ -729,7 +734,7 @@ def main_logic(sys_args=None):
         
         effective_workspace_id = args.workspace_id
         if args.workspace_id == "${workspaceFolder}":
-            import os
+            # import os # Moved to top-level imports
             current_cwd = os.getcwd()
             warning_msg = (
                 f"MAIN.PY: WARNING - Workspace ID was literally '${{workspaceFolder}}'. "
@@ -741,23 +746,38 @@ def main_logic(sys_args=None):
             sys.stderr.write(warning_msg + "\\n"); sys.stderr.flush()
             effective_workspace_id = current_cwd
         
-        # The following lines are now part of the 'else' to the 'if args.workspace_id == "${workspaceFolder}":'
-        # or will only be reached if workspace_id is not the literal string.
-        # However, if workspace_id is None or empty after parsing, argparse should handle it if 'required=True'.
-        # If it's not required and still None/empty, we might need another check here.
-        # For now, assuming args.workspace_id will be a valid path if not "${workspaceFolder}".
-        # The 'effective_workspace_id' will be args.workspace_id if it's not the literal string.
+            # CRITICAL CHECK: Prevent creating DB in server's own directory due to misconfiguration
+            if effective_workspace_id and os.path.abspath(effective_workspace_id) == CONPORT_SERVER_ROOT_DIR:
+                error_msg = (
+                    f"CRITICAL ERROR: STDIO mode effective_workspace_id ('{effective_workspace_id}') "
+                    f"resolved to the ConPort server's own root directory ('{CONPORT_SERVER_ROOT_DIR}'). "
+                    "This is likely due to a client-side MCP configuration error where "
+                    "'--workspace_id' was not correctly resolved to your target project path, "
+                    "and no 'cwd' was set to the target project by the client. "
+                    "ConPort will NOT create a database within its own installation directory. "
+                    "Please correct your MCP client configuration to provide an absolute path "
+                    "for '--workspace_id' or ensure your client sets 'cwd' to your target project."
+                )
+                log.critical(error_msg)
+                sys.stderr.write(error_msg + "\\n"); sys.stderr.flush()
+                sys.exit(1)
         
         sys.stderr.write(f"MAIN.PY: STDIO mode - Effective workspace_id for DB validation: {effective_workspace_id}\\n"); sys.stderr.flush()
         sys.stderr.write("MAIN.PY: STDIO mode - Before DB path validation.\\n"); sys.stderr.flush()
         try:
-            from src.context_portal_mcp.core.config import get_database_path # Ensure it's imported
-            get_database_path(effective_workspace_id) # Validate path early
-            log.info(f"Workspace ID {effective_workspace_id} path validated for DB for STDIO mode.")
-            sys.stderr.write("MAIN.PY: STDIO mode - DB path validated successfully.\\n"); sys.stderr.flush()
-        except Exception as e:
-            log.error(f"Invalid effective_workspace_id '{effective_workspace_id}' for database in STDIO mode: {e}")
-            sys.stderr.write(f"MAIN.PY: STDIO mode - DB path validation FAILED for '{effective_workspace_id}': {e}\\n"); sys.stderr.flush()
+            # from src.context_portal_mcp.core.config import get_database_path # Import happens at module level
+            # get_database_path(effective_workspace_id) # EARLY VALIDATION REMOVED - Path validation and dir creation will occur on first DB access.
+            
+            if not effective_workspace_id or not os.path.isdir(effective_workspace_id): # Basic check if path is a directory
+                 log.error(f"STDIO mode: effective_workspace_id ('{effective_workspace_id}') is not a valid directory. Please ensure client provides a correct absolute path or sets 'cwd' appropriately if using '${{workspaceFolder}}'.")
+                 sys.stderr.write(f"MAIN.PY: STDIO mode - ERROR: effective_workspace_id ('{effective_workspace_id}') is not a valid directory.\\n"); sys.stderr.flush()
+                 sys.exit(1)
+
+            log.info(f"STDIO mode: Using effective_workspace_id '{effective_workspace_id}'. Database directory will be created on first actual DB use.")
+            sys.stderr.write(f"MAIN.PY: STDIO mode - Effective workspace_id '{effective_workspace_id}' noted. DB dir creation deferred to first use.\\n"); sys.stderr.flush()
+        except Exception as e: # Catch any other unexpected errors during this initial workspace_id handling
+            log.error(f"Unexpected error processing effective_workspace_id '{effective_workspace_id}' in STDIO mode setup: {e}")
+            sys.stderr.write(f"MAIN.PY: STDIO mode - UNEXPECTED ERROR during workspace_id handling: {e}\\n"); sys.stderr.flush()
             sys.exit(1)
         
         # Note: The `FastMCP.run()` method is synchronous and will block until the server stops.

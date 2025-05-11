@@ -118,15 +118,25 @@ STDIO mode is recommended for IDE integration, allowing the IDE to manage the se
 
 Configure your MCP client (e.g., IDE extension) to connect to ConPort. This example is for a VS Code-like `mcp.json` or user-level MCP settings.
 
-**Crucial:** The `command` and `args` (specifically the path to `main.py`), and the `cwd` parameter in the configuration below **MUST** point to the location where **YOU** cloned the `context-portal` repository.
+**Recommended Configuration (Direct Python Invocation):**
+
+This configuration directly invokes the Python interpreter from the `context-portal` virtual environment. It's a reliable method that does not depend on `uv` being the command or the client supporting a `cwd` field for the server process.
+
+**Important:**
+*   You **MUST** replace placeholder paths with the **absolute paths** corresponding to where you have cloned and set up your `context-portal` repository.
+*   The `"${workspaceFolder}"` variable for the `--workspace_id` argument is a common IDE placeholder that should expand to the absolute path of your current project workspace.
+
+**Linux/macOS Example:**
+
+Imagine your `context-portal` repository is cloned at `/home/youruser/projects/context-portal`.
 
 ```json
 {
   "mcpServers": {
     "conport-stdio": {
-      "command": "/path/to/your/virtualenv/bin/python",
+      "command": "/home/youruser/projects/context-portal/.venv/bin/python",
       "args": [
-        "/path/to/your/cloned/context-portal/src/context_portal_mcp/main.py",
+        "/home/youruser/projects/context-portal/src/context_portal_mcp/main.py",
         "--mode",
         "stdio",
         "--workspace_id",
@@ -137,27 +147,68 @@ Configure your MCP client (e.g., IDE extension) to connect to ConPort. This exam
 }
 ```
 
-*   **Replace `/path/to/your/cloned/context-portal`** in the `cwd` field with the **absolute path** to the directory where you cloned the `context-portal` repository.
-    *   For example, if you cloned it into `/home/user/projects/context-portal`, then `cwd` would be `/home/user/projects/context-portal`.
-*   The path to `main.py` within `args` is now relative to this `cwd`.
-*   `${workspaceFolder}` is a common IDE variable representing the current project's root path.
-*   **Windows Example Path:** If you cloned `context-portal` to `C:\Users\YourUser\Projects\context-portal`, the `cwd` in the JSON would be `"C:\\Users\\YourUser\\Projects\\context-portal"`. Remember to escape backslashes.
+**Windows Example:**
 
-### Full Windows Configuration Example:
-
-If your `context-portal` repository is cloned to `C:\Users\YourUser\Projects\context-portal`, your configuration would look like this:
+Imagine your `context-portal` repository is cloned at `C:\Users\YourUser\Projects\context-portal`.
+Note the use of double backslashes `\\` for paths in JSON strings.
 
 ```json
 {
   "mcpServers": {
     "conport-stdio": {
-      "command": "C:\\Path\\To\\Your\\VirtualEnv\\Scripts\\python.exe",
+      "command": "C:\\Users\\YourUser\\Projects\\context-portal\\.venv\\Scripts\\python.exe",
       "args": [
-        "C:\\Path\\To\\Your\\Cloned\\context-portal\\src\\context_portal_mcp\\main.py",
+        "C:\\Users\\YourUser\\Projects\\context-portal\\src\\context_portal_mcp\\main.py",
         "--mode",
         "stdio",
         "--workspace_id",
         "${workspaceFolder}"
+      ]
+    }
+  }
+}
+```
+*   **`command`**: This must be the absolute path to the `python` (or `python.exe` on Windows) executable within the `.venv` of your `context-portal` installation.
+*   **First argument in `args`**: This must be the absolute path to the `main.py` script within your `context-portal` installation.
+*   **`--workspace_id "${workspaceFolder}"`**: This tells ConPort which project's context to manage. `${workspaceFolder}` should be resolved by your IDE to the current project's root path.
+
+**Key Takeaway:** For STDIO mode, ConPort critically relies on an accurate `--workspace_id` to identify the target project. Ensure this argument correctly resolves to the absolute path of your project workspace, either through IDE variables like `${workspaceFolder}` or by providing a direct absolute path.
+### Full Windows Configuration Examples:
+
+**1. Recommended (Direct Python Invocation):**
+Assuming `context-portal` is cloned to `C:\Users\YourUser\Projects\context-portal`:
+
+```json
+{
+  "mcpServers": {
+    "conport-stdio": {
+      "command": "C:\\Users\\YourUser\\Projects\\context-portal\\.venv\\Scripts\\python.exe",
+      "args": [
+        "C:\\Users\\YourUser\\Projects\\context-portal\\src\\context_portal_mcp\\main.py",
+        "--mode",
+        "stdio",
+        "--workspace_id",
+        "${workspaceFolder}"
+      ]
+    }
+  }
+}
+```
+*Refer to the main "Recommended Configuration (Direct Python Invocation)" section above for details on the `command`, `args`, and `workspace_id` parameters.*
+**2. Alternative (No `cwd`, Full Absolute Paths):**
+Assuming `context-portal` is cloned to `C:\Users\YourUser\Projects\context-portal` and your target project is `C:\Users\YourUser\MyProject`:
+
+```json
+{
+  "mcpServers": {
+    "conport-stdio": {
+      "command": "C:\\Users\\YourUser\\Projects\\context-portal\\.venv\\Scripts\\python.exe",
+      "args": [
+        "C:\\Users\\YourUser\\Projects\\context-portal\\src\\context_portal_mcp\\main.py",
+        "--mode",
+        "stdio",
+        "--workspace_id",
+        "C:\\Users\\YourUser\\MyProject" // Must be absolute path to target project
       ]
     }
   }
@@ -229,7 +280,7 @@ The ConPort server exposes the following tools via MCP. All tools require a `wor
     *   `update_product_context`: Updates the product context. Accepts full `content` (object) or `patch_content` (object) for partial updates (use `__DELETE__` as a value in patch to remove a key).
 *   **Active Context Management:**
     *   `get_active_context`: Retrieves the current working focus, recent changes, and open issues.
-    *   `update_active_context`: Updates the active context. Accepts full `content` (object) or `patch_content` (object).
+    *   `update_active_context`: Updates the active context. Accepts full `content` (object) or `patch_content` (object) for partial updates (use `__DELETE__` as a value in patch to remove a key).
 *   **Decision Logging:**
     *   `log_decision`: Logs an architectural or implementation decision.
         *   Args: `summary` (str, req), `rationale` (str, opt), `implementation_details` (str, opt), `tags` (list[str], opt).
