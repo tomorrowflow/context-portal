@@ -7,6 +7,8 @@
   <img src="assets/images/cursor.png" alt="Cursor IDE Logo" height="40" style="margin-right: 10px;"/>
 </div>
 
+<br>
+
 A database-backed Model Context Protocol (MCP) server for managing structured project context, designed to be used by AI assistants and developer tools within IDEs and other interfaces.
 
 ## Overview
@@ -220,13 +222,13 @@ Assuming `context-portal` is cloned to `C:\Users\YourUser\Projects\context-porta
 ConPort's effectiveness with LLM agents is significantly enhanced by providing specific custom instructions or system prompts to the LLM. This repository includes tailored strategy files for different environments:
 
 *   **For Roo Code IDE:**
-    *   [`roo_code_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/roo_code_conport_strategy): Contains detailed instructions for LLMs operating within the Roo Code IDE, guiding them on how to use ConPort tools for context management.
+    *   [`roo_code_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/conport-custom-instructions/roo_code_conport_strategy): Contains detailed instructions for LLMs operating within the Roo Code IDE, guiding them on how to use ConPort tools for context management.
 *   **For CLine (Command Line Interface):**
-    *   [`cline_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/cline_conport_strategy): Instructions optimized for LLMs interacting via a command-line interface that supports ConPort.
+    *   [`cline_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/conport-custom-instructions/cline_conport_strategy): Instructions optimized for LLMs interacting via a command-line interface that supports ConPort.
 *   **For Windsurf Cascade:**
-    *   [`cascade_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/cascade_conport_strategy): Specific guidance for LLMs integrated with the Windsurf Cascade environment.
+    *   [`cascade_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/conport-custom-instructions/cascade_conport_strategy): Specific guidance for LLMs integrated with the Windsurf Cascade environment.
 *   **For General/Platform-Agnostic Use:**
-    *   [`generic_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/generic_conport_strategy): Provides a platform-agnostic set of instructions for any MCP-capable LLM. It emphasizes using ConPort's `get_conport_schema` operation to dynamically discover the exact ConPort tool names and their parameters, guiding the LLM on *when* and *why* to perform conceptual interactions (like logging a decision or updating product context) rather than hardcoding specific tool invocation details.
+    *   [`generic_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/conport-custom-instructions/generic_conport_strategy): Provides a platform-agnostic set of instructions for any MCP-capable LLM. It emphasizes using ConPort's `get_conport_schema` operation to dynamically discover the exact ConPort tool names and their parameters, guiding the LLM on *when* and *why* to perform conceptual interactions (like logging a decision or updating product context) rather than hardcoding specific tool invocation details.
 
 **How to Use These Strategy Files:**
 
