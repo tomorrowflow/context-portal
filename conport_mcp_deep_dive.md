@@ -5,7 +5,7 @@ Version: 0.1.0
 ## 1. Introduction & Overview
 
 ### Purpose
-The Context Portal (ConPort) MCP server is designed to manage and provide structured project context for AI assistants, particularly within Integrated Development Environments (IDEs). Its primary goal is to enhance an AI's contextual understanding of a specific software project by maintaining a queryable, persistent, and workspace-specific knowledge base. This approach provides a structured alternative to simpler, file-based context systems.
+The Context Portal (ConPort) MCP server is designed to manage and provide structured project context for AI assistants, particularly within Integrated Development Environments (IDEs). Its primary goal is to enhance an AI's contextual understanding of a specific software project by maintaining a queryable, persistent, and workspace-specific **knowledge graph**. This structured knowledge base is designed to serve as a powerful backend for **Retrieval Augmented Generation (RAG)**, enabling AI assistants to access precise, up-to-date information. This approach provides a structured alternative to simpler, file-based context systems.
 
 ### Core Technologies
 *   **Language/Framework:** Python, utilizing the FastAPI framework for robust web server capabilities and Pydantic for data validation and modeling.
@@ -16,8 +16,11 @@ The Context Portal (ConPort) MCP server is designed to manage and provide struct
 *   **Workspace-Specific Context:** All data managed by ConPort is tied to a `workspace_id` (typically the absolute path to a project directory). This ensures that context remains relevant to the specific project being worked on.
 *   **Dual Communication Modes:** The server can operate in two modes:
     *   **STDIO (Standard Input/Output):** For direct, local communication with an MCP client (e.g., an IDE extension like Roo Code). This mode is efficient for local inter-process communication.
+    *   **HTTP (Hypertext Transfer Protocol):** The server can also run as an HTTP service (using Uvicorn and FastAPI), exposing its MCP tools via an HTTP endpoint (typically `/mcp`). This allows for broader accessibility from clients that prefer or require HTTP communication.
 *   **Structured Data Management:** ConPort defines several core data entities (see Section 2) to structure project knowledge, such as decisions, progress, system patterns, and custom data.
 *   **Tool-Based Interaction:** AI assistants interact with ConPort by calling its defined MCP tools, each designed for a specific operation (e.g., logging a decision, retrieving active context).
+*   **Knowledge Graph Construction:** ConPort facilitates the creation of a project-specific knowledge graph by storing structured entities (decisions, code patterns, glossary terms) and allowing explicit, queryable relationships to be defined between them using tools like `link_conport_items`.
+*   **RAG Enablement:** The system is designed to be a core component for Retrieval Augmented Generation (RAG) workflows. Its rich querying capabilities (FTS, direct retrieval, graph traversal) allow AI agents to fetch relevant context to augment their generative tasks, leading to more accurate and grounded outputs.
 ## 2. Core Data Entities & Database Schema
 
 ConPort utilizes an SQLite database, specific to each workspace, to store its structured context. The key data entities and their corresponding database tables are:
@@ -74,7 +77,7 @@ ConPort utilizes an SQLite database, specific to each workspace, to store its st
     *   **Search:** Supported by an FTS5 virtual table `custom_data_fts` (searches category, key, and the text content of the value).
 
 7.  **Context Links (`context_links`)**
-    *   **Purpose:** Establishes relationships between different ConPort data entities (e.g., a decision is implemented by a system pattern, a progress item tracks a decision).
+    *   **Purpose:** Establishes explicit, queryable relationships between different ConPort data entities (e.g., a decision is implemented by a system pattern, a progress item tracks a decision), forming the edges of the **project knowledge graph**.
     *   **Schema:**
         *   `id` (INTEGER, PK, AUTOINCREMENT)
         *   `timestamp` (TIMESTAMP): When the link was created.
@@ -98,7 +101,7 @@ ConPort utilizes an SQLite database, specific to each workspace, to store its st
 Pydantic models defined in `src/context_portal_mcp/db/models.py` mirror these table structures and are used for data validation and serialization/deserialization within the server.
 ## 3. MCP Tool Reference
 
-The ConPort server exposes the following MCP tools. All tools require a `workspace_id` argument, which is an identifier for the workspace (e.g., absolute path) to ensure data operations are performed in the correct context.
+The ConPort server exposes the following MCP tools. These tools allow AI agents to interact with and build upon the **project knowledge graph**, and to retrieve specific information crucial for **Retrieval Augmented Generation (RAG)**. All tools require a `workspace_id` argument, which is an identifier for the workspace (e.g., absolute path) to ensure data operations are performed in the correct context.
 
 ### 3.1 Product Context Tools
 
@@ -179,7 +182,7 @@ The ConPort server exposes the following MCP tools. All tools require a `workspa
     *   `parent_id` (integer, optional): ID of the parent task, if this is a subtask (Default: null)
     *   `linked_item_type` (string, optional): Optional: Type of the ConPort item this progress entry is linked to (e.g., 'decision', 'system_pattern') (Default: null)
     *   `linked_item_id` (string, optional): Optional: ID/key of the ConPort item this progress entry is linked to (requires linked_item_type) (Default: null)
-    *   <!-- `link_relationship_type` (string, optional): Relationship type for the automatic link if `linked_item_type` and `linked_item_id` are provided (e.g., "tracks_decision"). (Default: null, or a server-defined default like "relates_to_progress" if applicable when linking) -->
+    *   `link_relationship_type` (string, optional): Relationship type for the automatic link if `linked_item_type` and `linked_item_id` are provided (e.g., "tracks_decision"). (Default: "relates_to_progress")
 *   **Pydantic Model:** `LogProgressArgs`
 
 #### 3.4.2 `get_progress`
@@ -280,7 +283,7 @@ The ConPort server exposes the following MCP tools. All tools require a `workspa
 ### 3.8 Knowledge Graph / Linking Tools
 
 #### 3.8.1 `link_conport_items`
-*   **Description:** Arguments for creating a link between two ConPort items.
+*   **Description:** Arguments for creating an explicit, typed link between two ConPort items, thereby enriching the **project knowledge graph**.
 *   **Arguments:**
     *   `workspace_id` (string): Identifier for the workspace (e.g., absolute path) (Required: Yes)
     *   `source_item_type` (string): Type of the source item (Required: Yes)
@@ -292,7 +295,7 @@ The ConPort server exposes the following MCP tools. All tools require a `workspa
 *   **Pydantic Model:** `LinkConportItemsArgs`
 
 #### 3.8.2 `get_linked_items`
-*   **Description:** Arguments for retrieving links for a ConPort item.
+*   **Description:** Arguments for retrieving links connected to a specific ConPort item, allowing traversal of the **project knowledge graph**.
 *   **Arguments:**
     *   `workspace_id` (string): Identifier for the workspace (e.g., absolute path) (Required: Yes)
     *   `item_type` (string): Type of the item to find links for (e.g., 'decision') (Required: Yes)
@@ -354,7 +357,10 @@ The server code is primarily located within the `src/context_portal_mcp/` direct
 
 ### 4.2 Running the Server
 
-The server is primarily run in **STDIO Mode**. This mode is intended for direct use by local MCP clients (like IDE extensions), and the `FastMCP` library handles the STDIO communication transport.
+The server can be run in two primary modes:
+
+#### STDIO Mode
+This mode is intended for direct use by local MCP clients (like IDE extensions), and the `FastMCP` library handles the STDIO communication transport.
     *   Command (from project root):
         ```bash
         python src/context_portal_mcp/main.py --mode stdio --workspace_id "/path/to/your/workspace"
@@ -365,9 +371,21 @@ The server is primarily run in **STDIO Mode**. This mode is intended for direct 
         ```
     *   **Note on `workspace_id` in STDIO mode:** The server includes logic to detect if `${workspaceFolder}` is passed literally (i.e., not expanded by the client) and will fall back to using the current working directory as the `workspace_id` in such cases, with a warning.
 
+#### HTTP Mode
+The server can also be run as an HTTP service using Uvicorn:
+    ```bash
+    uvicorn src.context_portal_mcp.main:app --host 127.0.0.1 --port 8000
+    ```
+Or using the CLI entry point:
+    ```bash
+    conport --mode http --host 127.0.0.1 --port 8000
+    ```
+In this mode, the MCP endpoint is typically available at `/mcp`.
+
 ### 4.3 Dependencies
 Key Python dependencies are managed via `requirements.txt` (or would be in a `pyproject.toml` if using Poetry/PDM). These include:
 *   `fastapi`: For the web server framework.
+*   `uvicorn[standard]`: As the ASGI server to run FastAPI in HTTP mode.
 *   `pydantic`: For data validation and settings management.
 *   `mcp[cli]` (or `mcp.py`): The Model Context Protocol SDK, specifically `FastMCP` for server implementation.
 *   `sqlite3` is part of the Python standard library.
@@ -410,7 +428,7 @@ While the ConPort server provides a robust set of features for managing project 
     *   While `value` in `custom_data` is `Any` (JSON serializable), providing explicit support or validation for common structured types (e.g., lists of specific objects, typed dictionaries) could be beneficial.
 
 4.  **Enhanced Retrieval for RAG (Retrieval-Augmented Generation):**
-    ConPort already functions as a key component in a RAG system by providing structured, queryable project context. Its FTS capabilities (for decisions, custom data) and direct data retrieval tools (`get_product_context`, `get_decisions`, etc.) serve as the "Retrieval" mechanism. To further enhance this:
+    ConPort already functions as a key component in a RAG system by enabling the construction and querying of a **project-specific knowledge graph**. Its FTS capabilities (for decisions, custom data) and direct data retrieval tools (`get_product_context`, `get_decisions`, etc.) serve as the "Retrieval" mechanism. To further enhance this:
     *   **Advanced Semantic Search:** Integrate vector embeddings for text-heavy fields (e.g., decision rationale, system pattern descriptions, custom data values). This would allow for finding conceptually similar items beyond keyword matches, significantly improving the quality of retrieved context for LLM augmentation. This could involve:
         *   A new ConPort tool to generate and store embeddings for specified data items.
         *   A new ConPort tool to perform semantic similarity searches using query embeddings.
