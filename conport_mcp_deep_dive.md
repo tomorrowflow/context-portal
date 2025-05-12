@@ -1,4 +1,4 @@
- # Context Portal (ConPort) MCP Server Documentation
+# Context Portal (ConPort) MCP Server Documentation
 
 Version: 0.1.0
 
@@ -169,7 +169,7 @@ The ConPort server exposes the following MCP tools. These tools allow AI agents 
 *   **Arguments:**
     *   `workspace_id` (string): Identifier for the workspace (e.g., absolute path) (Required: Yes)
     *   `decision_id` (integer): The ID of the decision to delete. (Required: Yes)
-*   **Pydantic Model:** `DeleteDecisionByIdArgs`
+    *   `Pydantic Model`: `DeleteDecisionByIdArgs`
 
 ### 3.4 Progress Tracking Tools
 
@@ -332,7 +332,7 @@ The ConPort server exposes the following MCP tools. These tools allow AI agents 
 *   **Description:** Arguments for retrieving the ConPort tool schema.
 *   **Arguments:**
     *   `workspace_id` (string): Identifier for the workspace (e.g., absolute path) (Required: Yes)
-*   **Pydantic Model:** `GetConportSchemaArgs`
+    *   `Pydantic Model`: `GetConportSchemaArgs`
 
 #### 3.10.3 `get_recent_activity_summary`
 *   **Description:** Arguments for retrieving a summary of recent ConPort activity.
@@ -341,7 +341,7 @@ The ConPort server exposes the following MCP tools. These tools allow AI agents 
     *   `hours_ago` (integer, optional): Look back this many hours for recent activity. Mutually exclusive with 'since_timestamp'. (Default: null)
     *   `since_timestamp` (string, format: date-time, optional): Look back for activity since this specific timestamp. Mutually exclusive with 'hours_ago'. (Default: null)
     *   `limit_per_type` (integer, optional): Maximum number of recent items to show per activity type (e.g., 5 most recent decisions). (Default: 5)
-*   **Pydantic Model:** `GetRecentActivitySummaryArgs`
+    *   `Pydantic Model`: `GetRecentActivitySummaryArgs`
 ## 4. Implementation Details & Guidelines
 
 ### 4.1 Project Structure
@@ -412,50 +412,67 @@ To add a new MCP tool:
 5.  **Database Schema (if needed):** If the new tool requires changes to the database schema (new tables, columns), update `db/database.py`'s `initialize_database` function accordingly, including any necessary `ALTER TABLE` statements for migration.
 ## 5. Future Development & Considerations
 
-While the ConPort server provides a robust set of features for managing project context, several areas could be explored for future enhancements:
+### 5.1 Enhanced Querying & Filtering
+*   More sophisticated filtering options for `get_decisions`, `get_progress`, etc. (e.g., date ranges, multiple status filters for progress).
+*   Full-text search capabilities for System Patterns.
+*   More advanced querying for `context_links` (e.g., graph traversal queries, finding items with no links).
 
-1.  **Enhanced Querying & Filtering:**
-    *   More sophisticated filtering options for `get_decisions`, `get_progress`, etc. (e.g., date ranges, multiple status filters for progress).
-    *   Full-text search capabilities for System Patterns.
-    *   More advanced querying for `context_links` (e.g., graph traversal queries, finding items with no links).
+### 5.2 Collaboration Features (if shifting to a multi-user model)
+*   User identification for logged items.
+*   Permissions and access control if data is shared.
+*   Real-time updates/notifications if a multi-user model were adopted for the same ConPort instance.
 
-2.  **Collaboration Features (if shifting to a multi-user model):**
-    *   User identification for logged items.
-    *   Permissions and access control if data is shared.
-    *   Real-time updates/notifications if a multi-user model were adopted for the same ConPort instance.
+### 5.3 Richer Data Types for Custom Data
+*   While `value` in `custom_data` is `Any` (JSON serializable), providing explicit support or validation for common structured types (e.g., lists of specific objects, typed dictionaries) could be beneficial.
 
-3.  **Richer Data Types for Custom Data:**
-    *   While `value` in `custom_data` is `Any` (JSON serializable), providing explicit support or validation for common structured types (e.g., lists of specific objects, typed dictionaries) could be beneficial.
+### 5.4 Enhanced Retrieval for RAG (Retrieval-Augmented Generation)
+ConPort already functions as a key component in a RAG system by enabling the construction and querying of a **project-specific knowledge graph**. Its FTS capabilities (for decisions, custom data) and direct data retrieval tools (get_product_context, get_decisions, etc.) serve as the "Retrieval" mechanism. To further enhance this:
+*   **Advanced Semantic Search:** Integrate vector embeddings for text-heavy fields (e.g., decision rationale, system pattern descriptions, custom data values). This would allow for finding conceptually similar items beyond keyword matches, significantly improving the quality of retrieved context for LLM augmentation. This could involve:
+    *   A new ConPort tool to generate and store embeddings for specified data items.
+    *   A new ConPort tool to perform semantic similarity searches using query embeddings.
+    *   Potentially integrating a vector database or extending SQLite with vector search capabilities (e.g., via extensions like `sqlite-vss`).
+*   **Context Chunking for LLMs:** Introduce a tool or mechanism to retrieve specific ConPort data items (or parts of them, like a long decision rationale) in "chunks" optimized for LLM context windows. This would help in feeding manageable pieces of relevant information to the LLM.
+*   **Automated Context Suggestion:** Develop tools within ConPort that, based on a query or a summary of the current task (perhaps provided by the LLM), could proactively suggest relevant ConPort items (decisions, patterns, glossary terms) that the LLM might want to retrieve to augment its generation. This could use a combination of FTS, semantic search, and knowledge graph traversal (`get_linked_items`).
+*   **Hybrid Search:** Combine keyword-based FTS with semantic search to leverage the strengths of both approaches for more robust and relevant retrieval.
 
-4.  **Enhanced Retrieval for RAG (Retrieval-Augmented Generation):**
-    ConPort already functions as a key component in a RAG system by enabling the construction and querying of a **project-specific knowledge graph**. Its FTS capabilities (for decisions, custom data) and direct data retrieval tools (`get_product_context`, `get_decisions`, etc.) serve as the "Retrieval" mechanism. To further enhance this:
-    *   **Advanced Semantic Search:** Integrate vector embeddings for text-heavy fields (e.g., decision rationale, system pattern descriptions, custom data values). This would allow for finding conceptually similar items beyond keyword matches, significantly improving the quality of retrieved context for LLM augmentation. This could involve:
-        *   A new ConPort tool to generate and store embeddings for specified data items.
-        *   A new ConPort tool to perform semantic similarity searches using query embeddings.
-        *   Potentially integrating a vector database or extending SQLite with vector search capabilities (e.g., via extensions like `sqlite-vss`).
-    *   **Context Chunking for LLMs:** Introduce a tool or mechanism to retrieve specific ConPort data items (or parts of them, like a long decision rationale) in "chunks" optimized for LLM context windows. This would help in feeding manageable pieces of relevant information to the LLM.
-    *   **Automated Context Suggestion:** Develop tools within ConPort that, based on a query or a summary of the current task (perhaps provided by the LLM), could proactively suggest relevant ConPort items (decisions, patterns, glossary terms) that the LLM might want to retrieve to augment its generation. This could use a combination of FTS, semantic search, and knowledge graph traversal (`get_linked_items`).
-    *   **Hybrid Search:** Combine keyword-based FTS with semantic search to leverage the strengths of both approaches for more robust and relevant retrieval.
+### 5.5 More Granular History
+*   Currently, only Product and Active Context have explicit history tables. Consider if versioning/history for other entities like Decisions or System Patterns would be valuable.
 
-5.  **More Granular History:**
-    *   Currently, only Product and Active Context have explicit history tables. Consider if versioning/history for other entities like Decisions or System Patterns would be valuable.
+### 5.6 Configuration & Usability
+*   Explore more dynamic ways to manage `workspace_id` or allow aliasing for long workspace paths.
 
-6.  **Configuration & Usability:**
-    *   Explore more dynamic ways to manage `workspace_id` or allow aliasing for long workspace paths.
+### 5.7 Alternative Communication Modes (SSE/HTTP)
+*   While STDIO is primary for local IDE integration, developing an alternative HTTP-based communication mode (potentially using Server-Sent Events for streaming if applicable) could broaden ConPort's accessibility to web-based clients or other tools that prefer HTTP over STDIO. This would leverage the existing FastAPI framework.
 
-7.  **Alternative Communication Modes (SSE/HTTP):**
-    *   While STDIO is primary for local IDE integration, developing an alternative HTTP-based communication mode (potentially using Server-Sent Events for streaming if applicable) could broaden ConPort's accessibility to web-based clients or other tools that prefer HTTP over STDIO. This would leverage the existing FastAPI framework.
+### 5.8 Flexible Database Storage & Identification
+*   Building upon the 'Configuration & Usability' point for `workspace_id`, implement the 'Flexible Database Storage (DatabaseID)' model (Decision ID 52). This would allow users to store ConPort databases in locations outside the workspace root (e.g., a centralized local directory or true remote storage). It involves assigning a unique `DatabaseID` to each workspace's context, which clients use for identification, while the ConPort server maps this ID to the actual database location and connection details. The local workspace path would still be relevant for resolving file references within the context data.
 
-8.  **Flexible Database Storage & Identification:**
-    *   Building upon the 'Configuration & Usability' point for `workspace_id`, implement the 'Flexible Database Storage (DatabaseID)' model (Decision ID 52). This would allow users to store ConPort databases in locations outside the workspace root (e.g., a centralized local directory or true remote storage). It involves assigning a unique `DatabaseID` to each workspace's context, which clients use for identification, while the ConPort server maps this ID to the actual database location and connection details. The local workspace path would still be relevant for resolving file references within the context data.
+### 5.9 Integration with Other Developer Tools
+*   Direct integration with issue trackers, version control systems (beyond simple linking), or CI/CD pipelines to automatically log context or make it available.
 
-9.  **Integration with Other Developer Tools:**
-    *   Direct integration with issue trackers, version control systems (beyond simple linking), or CI/CD pipelines to automatically log context or make it available.
+### 5.10 Backup and Restore Enhancements
+*   While Markdown export/import exists, more robust backup/restore mechanisms (e.g., direct SQLite backup/restore tools, cloud synchronization options) could be considered for critical data.
 
-10. **Backup and Restore Enhancements:**
-    *   While Markdown export/import exists, more robust backup/restore mechanisms (e.g., direct SQLite backup/restore tools, cloud synchronization options) could be considered for critical data.
-
-11. **Schema Evolution and Migration:**
-    *   The current `ALTER TABLE` approach for adding columns is basic. A more formal database migration system (like Alembic) might be needed if the schema undergoes frequent or complex changes.
+### 5.11 Schema Evolution and Migration
+*   The current `ALTER TABLE` approach for adding columns is basic. A more formal database migration system (like Alembic) might be needed if the schema undergoes frequent or complex changes.
 
 These considerations depend on the evolving goals and use cases for the ConPort server. The current architecture provides a solid foundation for many of these potential enhancements.
+
+## Prompt Caching Integration
+
+ConPort plays a crucial role in enabling AI assistants to effectively utilize **prompt caching** with compatible LLM providers (such as Google Gemini, Anthropic Claude, and OpenAI). By providing structured, queryable project context, ConPort supplies the stable, frequently used information that forms the basis for caching.
+
+**How ConPort Supports Prompt Caching:**
+
+1.  **Structured Context as Cacheable Content:** ConPort stores key project information (Product Context, System Patterns, Custom Data like glossaries or specifications) in a structured database. This allows AI assistants to reliably retrieve specific, often large, blocks of text that are ideal candidates for inclusion in the cacheable prefix of prompts sent to LLMs.
+2.  **User-Defined Cache Hints:** The `custom_data` entity (and potentially others if extended) supports a `metadata` field. Users can add hints (e.g., `{"cache_hint": true}`) to this metadata to explicitly flag content that should be prioritized for prompt caching by the AI assistant.
+3.  **AI Assistant Strategy Guidance:** The custom instruction files for AI assistants (like those in `conport-custom-instructions/`) are updated to include a `prompt_caching_strategies` section. This section, which can be included directly in the prompt or referenced from a central file (`context_portal/prompt_caching_strategy.yml`), guides the AI on:
+    *   Identifying suitable cacheable content from ConPort based on heuristics and user hints.
+    *   Structuring prompts according to the specific requirements of the target LLM provider's caching mechanism (implicit for Gemini/OpenAI, explicit breakpoints for Anthropic).
+    *   Notifying the user when a prompt is structured for potential caching.
+
+**Mechanism:**
+
+The AI assistant, upon receiving a user request, identifies necessary context from ConPort using tools like `get_product_context`, `get_custom_data`, etc. Based on the retrieved content and the defined prompt caching strategy, the assistant constructs the prompt sent to the LLM API. For providers with implicit caching, the cacheable ConPort content is placed at the beginning. For providers with explicit caching, the content is included with the necessary markers.
+
+This integration ensures that the valuable, structured knowledge stored in ConPort is actively used to improve the efficiency and cost-effectiveness of AI interactions through prompt caching.

@@ -1,3 +1,11 @@
+# --- External Strategy References ---
+# This section lists external files containing specific strategies or instructions.
+# The LLM assistant should read and incorporate these strategies as needed.
+external_strategies:
+  prompt_caching:
+    file_path: "context_portal/prompt_caching_strategy.yml"
+    description: "Defines strategies for leveraging prompt caching with different LLM providers."
+
 conport_memory_strategy:
   workspace_id_source: "The agent must obtain the absolute path to the current workspace to use as `workspace_id` for all ConPort tool calls. This might be available as `${workspaceFolder}` or require asking the user."
 
@@ -113,7 +121,7 @@ conport_memory_strategy:
         <thinking>
         - Product context needs updating.
         - Step 1: (Optional but recommended if unsure of current state) Invoke `get_product_context`.
-        - Step 2: Prepare the `content` (for full overwrite) or `patch_content` (for partial update) dictionary.
+        - Step 2: Prepare the `content` (for full overwrite) or `patch_content` (partial update) dictionary.
         - To remove a key using `patch_content`, set its value to the special string sentinel `\"__DELETE__\"`.
         - Confirm changes with the user.
         </thinking>
@@ -227,7 +235,7 @@ conport_memory_strategy:
 
     # (Keep reconfigure_core_guidance as is)
     reconfigure_core_guidance:
-      product_active_context: "The internal JSON structure of 'Product Context' and 'Active Context' (the `content` field) is flexible. Work with the user to define/evolve this structure via `update_product_context` and `update_active_context`. The server stores this `content` as a JSON blob."
+      product_active_context: "The internal JSON structure of 'Product Context' and 'Active Context' (the `content` field) is flexible. Work with the user to define and evolve this structure via `update_product_context` and `update_active_context`. The server stores this `content` as a JSON blob."
       decisions_progress_patterns: "The fundamental fields for Decisions, Progress, and System Patterns are fixed by ConPort's tools. For significantly different structures or additional fields, guide the user to create a new custom context category using `log_custom_data` (e.g., category: 'project_milestones_detailed')."
 
   conport_sync_routine: # Renamed from umb_update_conport
@@ -255,6 +263,121 @@ conport_memory_strategy:
       # 8. If many items of the same type were discussed, consider `batch_log_items`.
       # 9. After updates, consider a brief `get_recent_activity_summary` to confirm and refresh understanding.
     post_umb_actions:
-      - "Inform user: ConPort has been synchronized with information from the current session."
+      - "Inform user: ConPort synchronized with session info."
       - "Resume previous task or await new instructions."
 
+# --- Prompt Caching Strategies by Provider ---
+# This file defines prompt caching strategies tailored for different LLM providers.
+# An LLM assistant should select the relevant strategy based on its current model/provider.
+
+prompt_caching_strategies:
+  enabled: true # Master switch to enable/disable prompt caching strategies
+
+  # --- Core Mandate (Applies to all enabled providers) ---
+  core_mandate: |
+    Actively seek opportunities to utilize prompt caching when interacting with the target LLM service.
+    Primary goals: Reduce token costs and improve response latency.
+    Leverage provider-specific caching mechanisms as defined below.
+    - Notify user when structuring a prompt for potential caching: [INFO: Structuring prompt for caching]
+
+  # --- Identifying Cacheable Content from ConPort (Applies to all providers) ---
+  content_identification:
+    description: |
+      Criteria for identifying content from ConPort that is suitable for prompt caching.
+      This content will form the stable prefix of prompts sent to the LLM.
+    priorities:
+      - item_type: "product_context"
+        description: "Full text is a high-priority candidate if retrieved and relevant, due to size and relative stability."
+      - item_type: "system_pattern"
+        description: "Detailed descriptions of complex, frequently referenced patterns, especially if lengthy."
+      - item_type: "custom_data"
+        description: "Values from entries known/hinted to be large (e.g., specs, guides) or flagged with 'cache_hint: true' metadata."
+      - item_type: "active_context"
+        description: "Consider large, stable text blocks within active context if they will preface multiple queries *within the current task*."
+
+    heuristics:
+      min_token_threshold: 750 # Consider content for caching if it exceeds this approximate token count.
+      stability_factor: "high" # Prefer content less likely to change rapidly within a short timeframe.
+
+  # --- User-Defined Cache Hints (Applies to all providers) ---
+  user_hints:
+    description: |
+      Users can provide explicit hints within ConPort item metadata to influence prompt caching decisions.
+      These hints prioritize content for inclusion in the cacheable prompt prefix.
+
+    retrieval: |
+      When retrieving ConPort items that support metadata (e.g., `custom_data`), check the `metadata` field for the key `cache_hint`.
+      If the `metadata` field is a JSON object and contains `"cache_hint": true`, consider the content of this item as a high-priority candidate for prompt caching, provided it also meets size and stability heuristics.
+
+    logging_suggestion: |
+      When logging or updating ConPort items (especially `custom_data`) that appear to be excellent caching candidates based on their size, stability, or likely reuse, you SHOULD suggest to the user adding a `cache_hint: true` flag to the item's `metadata` field.
+      Confirm with the user before applying.
+      Example suggestion: "This [Item Type, e.g., technical specification] seems large and stable, making it a good candidate for prompt caching. Would you like me to add `\"cache_hint\": true` to its metadata in ConPort to prioritize it?"
+
+  # --- Strategy Note: Local Load vs. Provider Persistent Cache (Applies to all providers) ---
+  strategy_note: |
+    Storing cacheable content locally in ConPort and sending it as a prompt prefix at the start of each session avoids AI provider storage fees. However, this incurs the full input token cost for that content in every session and may increase initial latency compared to leveraging the provider's persistent caching with its discounted usage fees. The optimal approach depends on session frequency and content size. Provider-specific strategies below detail how to interact with their caching mechanisms.
+
+  # --- Provider Specific Strategies ---
+
+  gemini_api:
+    description: Strategy for Google Gemini models (e.g., 1.5 Pro, 1.5 Flash) which support implicit caching.
+    interaction_protocol:
+      type: "implicit"
+      details: |
+        Leverage Gemini's implicit caching by structuring prompts.
+        1. Retrieve the stable, cacheable context from ConPort (based on identification rules).
+        2. Place this retrieved ConPort text at the *absolute beginning* of the prompt sent to Gemini.
+        3. Append any variable, task-specific parts (e.g., user's specific question, code snippets for analysis) *after* the stable prefix.
+        Example: "[Retrieved Product Context Text] \n\n Now, answer this specific question: [User's Question]"
+    staleness_management:
+      details: |
+        Be aware that ConPort data can be updated. Cached versions of that data in Gemini have a TTL.
+        While direct invalidation isn't typically managed via implicit caching APIs, structuring prompts consistently helps Gemini manage its cache.
+        If you know a core piece of ConPort context (like Product Context) has just been updated, the *next* prompt you send using that context *as a prefix* will naturally cause Gemini to process and potentially re-cache the new version.
+
+  anthropic_api:
+    description: Strategy for Anthropic Claude models (e.g., 3.5 Sonnet, 3 Haiku, 3 Opus) which require explicit cache control.
+    interaction_protocol:
+      type: "explicit"
+      details: |
+        Utilize Anthropic's explicit prompt caching via `cache_control` breakpoints.
+        1. Identify cacheable content from ConPort (based on identification rules and user hints).
+        2. Construct the prompt message payload for the Anthropic API.
+        3. Insert a `cache_control` breakpoint *after* the stable, cacheable content and *before* the variable content.
+        Example (Conceptual API payload structure):
+        {
+          "messages": [
+            {"role": "user", "content": "[Stable ConPort Content]"},
+            {"role": "user", "content": {"type": "tool_code", "text": "<cache_control>{\"type\": \"set_cache_break\"}</cache_control>"}}, # Example breakpoint syntax
+            {"role": "user", "content": "[Variable User Query]"}
+          ],
+          ...
+        }
+        (Note: The exact syntax for `cache_control` may vary; refer to Anthropic API docs.)
+    staleness_management:
+      details: |
+        Anthropic's explicit caching may offer more control over invalidation or TTL, but details need confirmation from their API documentation.
+        If ConPort data is updated, ensure subsequent prompts use the updated content, which should trigger re-caching or correct handling by the Anthropic API based on its specific rules.
+
+  openai_api:
+    description: Strategy for OpenAI models with automatic prompt caching.
+    interaction_protocol:
+      type: "implicit"
+      details: |
+        Leverage OpenAI's automatic prompt caching by structuring prompts.
+        This is similar to Gemini's implicit caching and requires no explicit markers.
+        1. Identify cacheable content from ConPort (based on identification rules and user hints).
+        2. Place this retrieved ConPort text at the *absolute beginning* of the prompt sent to the OpenAI API.
+        3. Append any variable, task-specific parts *after* the stable prefix.
+        OpenAI provides a 50% discount on cached input tokens. Caching automatically activates for prompts over a certain length (e.g., >1024 tokens, but verify current documentation).
+    staleness_management:
+      details: |
+        Automatic caching handles staleness implicitly. If prompt prefix changes (e.g., updated ConPort data), OpenAI processes/re-caches new prefix.
+
+  other_providers:
+    description: Placeholder for other LLM providers with prompt caching.
+    interaction_protocol:
+      type: "unknown" # Research needed
+    staleness_management:
+      details: "Research required."
