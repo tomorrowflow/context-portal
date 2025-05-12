@@ -318,15 +318,15 @@ If you find ConPort useful and would like to show your appreciation, any small t
 <div align="center">
   <table style="border: none; width: 100%;">
     <tr style="border: none;">
-      <td style="border: none; padding: 20px; text-align: center; width: 33%;">
+      <td style="border: none; padding: 60px; text-align: center; width: 33%;">
         <img src="assets/images/paypal.png" alt="PayPal QR Code" height="75"><br>
         PayPal
       </td>
-      <td style="border: none; padding: 20px; text-align: center; width: 33%;">
+      <td style="border: none; padding: 60px; text-align: center; width: 33%;">
         <img src="assets/images/cashapp.png" alt="Cash App QR Code" height="75"><br>
         Cash App
       </td>
-      <td style="border: none; padding: 20px; text-align: center; width: 33%;">
+      <td style="border: none; padding: 60px; text-align: center; width: 33%;">
         <img src="assets/images/venmo.png" alt="Venmo QR Code" height="75"><br>
         Venmo
       </td>
