@@ -13,7 +13,7 @@ A database-backed Model Context Protocol (MCP) server for managing structured pr
 
 ## Overview
 
-This project is the **Context Portal MCP server (ConPort)**. ConPort provides a robust and structured way for AI assistants to store, retrieve, and manage various types of project context (e.g., product goals, active tasks, decisions, progress, architectural patterns, custom data) via a dedicated MCP server.
+This project is the **Context Portal MCP server (ConPort)**. ConPort provides a robust and structured way for AI assistants to store, retrieve, and manage various types of project context. It effectively builds a **project-specific knowledge graph**, capturing entities like decisions, progress, and architecture, along with their relationships. This structured knowledge base then serves as a powerful backend for **Retrieval Augmented Generation (RAG)**, enabling AI assistants to access precise, up-to-date information for more context-aware and accurate responses.
 
 It replaces older file-based context management systems by offering a more reliable and queryable database backend (SQLite per workspace). ConPort is designed to be a generic context backend, compatible with various IDEs and client interfaces that support MCP.
 
@@ -23,6 +23,8 @@ Key features include:
 *   A comprehensive suite of defined MCP tools for interaction (see "Available ConPort Tools" below).
 *   Multi-workspace support via `workspace_id`.
 *   Primary deployment mode: STDIO for tight IDE integration.
+*   Enables building a dynamic **project knowledge graph** with explicit relationships between context items.
+*   Serves as an ideal backend for **Retrieval Augmented Generation (RAG)**, providing AI with precise, queryable project memory.
 
 ## Prerequisites
 
@@ -234,7 +236,7 @@ By providing initial context, either through `projectBrief.md` or manual entry, 
 
 ## Available ConPort Tools
 
-The ConPort server exposes the following tools via MCP. All tools require a `workspace_id` argument (string, required) to specify the target project workspace.
+The ConPort server exposes the following tools via MCP, allowing interaction with the underlying **project knowledge graph**. These tools facilitate the **Retrieval** aspect crucial for **Augmented Generation (RAG)** by AI agents. All tools require a `workspace_id` argument (string, required) to specify the target project workspace.
 
 *   **Product Context Management:**
     *   `get_product_context`: Retrieves the overall project goals, features, and architecture.
@@ -275,7 +277,7 @@ The ConPort server exposes the following tools via MCP. All tools require a `wor
     *   `search_custom_data_value_fts`: Full-text search across all custom data values, categories, and keys.
         *   Args: `query_term` (str, req), `category_filter` (str, opt), `limit` (int, opt).
 *   **Context Linking:**
-    *   `link_conport_items`: Creates a relationship link between two ConPort items.
+    *   `link_conport_items`: Creates a relationship link between two ConPort items, explicitly building out the **project knowledge graph**.
         *   Args: `source_item_type` (str, req), `source_item_id` (str, req), `target_item_type` (str, req), `target_item_id` (str, req), `relationship_type` (str, req), `description` (str, opt).
     *   `get_linked_items`: Retrieves items linked to a specific item.
         *   Args: `item_type` (str, req), `item_id` (str, req), `relationship_type_filter` (str, opt), `linked_item_type_filter` (str, opt), `limit` (int, opt).
