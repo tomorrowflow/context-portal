@@ -4,10 +4,10 @@
 
 <br>
 
-  <img src="assets/images/roo-logo.png" alt="Roo Code Logo" height="40" style="margin-right: 25px;"/>
-  <img src="assets/images/cline.png" alt="CLine Logo" height="40" style="margin-right: 25px;"/>
-  <img src="assets/images/windsurf.png" alt="Windsurf Cascade Logo" height="40" style="margin-right: 25px;"/>
-  <img src="assets/images/cursor.png" alt="Cursor IDE Logo" height="40" style="margin-right: 25px;"/>
+  <img src="assets/images/roo-logo.png" alt="Roo Code Logo" height="40"/>&nbsp;&nbsp;&nbsp;
+  <img src="assets/images/cline.png" alt="CLine Logo" height="40"/>&nbsp;&nbsp;&nbsp;
+  <img src="assets/images/windsurf.png" alt="Windsurf Cascade Logo" height="40"/>&nbsp;&nbsp;&nbsp;
+  <img src="assets/images/cursor.png" alt="Cursor IDE Logo" height="40"/>
 
 <br>
 
