@@ -2,18 +2,20 @@
 
 # Context Portal MCP (ConPort)
 
+<br>
 
   <img src="assets/images/roo-logo.png" alt="Roo Code Logo" height="40" style="margin-right: 25px;"/>
   <img src="assets/images/cline.png" alt="CLine Logo" height="40" style="margin-right: 25px;"/>
   <img src="assets/images/windsurf.png" alt="Windsurf Cascade Logo" height="40" style="margin-right: 25px;"/>
   <img src="assets/images/cursor.png" alt="Cursor IDE Logo" height="40" style="margin-right: 25px;"/>
 
-
 <br>
 
 A database-backed Model Context Protocol (MCP) server for managing structured project context, designed to be used by AI assistants and developer tools within IDEs and other interfaces.
 
 </div>
+
+<br>
 
 ## Overview
 
