@@ -86,7 +86,7 @@ cascade_conport_integration:
     server_name_note: |
       The ConPort server (plugin) is typically named `conport-stdio` (or as configured by the user in `~/.codeium/windsurf/mcp_config.json`).
     detailed_strategy_note: |
-      For detailed tool argument structures and advanced usage protocols, refer to the `windsurf_conport_strategy.md` document if available, or use the ConPort `get_conport_schema` tool for direct schema retrieval.
+      For detailed tool argument structures and advanced usage protocols, use the ConPort `get_conport_schema` tool for direct schema retrieval.
 
   user_driven_memory_sync:
     trigger_phrase_examples: # For Cascade's understanding of when to initiate this

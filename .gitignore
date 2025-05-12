@@ -13,6 +13,9 @@ projectBrief.md
 *.log
 conport_export/
 code-complexity-server/
+install_rooflow_conport.sh
+conport_instructions_suggestions.md
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

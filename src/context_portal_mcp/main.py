@@ -9,8 +9,6 @@ from contextlib import asynccontextmanager # Added
 
 # MCP SDK imports
 from mcp.server.fastmcp import FastMCP, Context as MCPContext # Renamed Context to avoid clash
-# ServerInfo from mcp.server.models was an incorrect import path.
-# FastMCP takes name directly. Version for serverInfo capability is often handled by the SDK.
 
 # Local imports
 try:
@@ -46,8 +44,6 @@ CONPORT_VERSION = "0.1.0"
 
 conport_mcp = FastMCP(
     name="ConPort", # Pass name directly
-    # The version for the serverInfo capability response will be handled by FastMCP,
-    # potentially from package metadata or a default.
     lifespan=conport_lifespan
 )
 
@@ -57,17 +53,10 @@ conport_mcp = FastMCP(
 app = FastAPI(title="ConPort MCP Server Wrapper", version=CONPORT_VERSION)
 
 # --- Adapt and Register Tools with FastMCP ---
-# This section replaces the old mcp_handlers.dispatch_tool and TOOL_HANDLERS
-
-# Example for get_product_context
-# Note: The original handlers returned the full JSON-RPC response.
-# FastMCP tool handlers should return the direct result data.
-# FastMCP uses type hints on the handler for input validation if no schema is provided.
 # We use our Pydantic models as input_schema for robust validation.
 
 @conport_mcp.tool(name="get_product_context")
 async def tool_get_product_context(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_get_product_context received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         # raw_args_from_fastmcp directly contains the arguments e.g. {'workspace_id': '...'}
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
@@ -85,7 +74,6 @@ async def tool_get_product_context(raw_args_from_fastmcp: Dict[str, Any], ctx: M
 
 @conport_mcp.tool(name="update_product_context")
 async def tool_update_product_context(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_update_product_context received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         content_val = raw_args_from_fastmcp.get("content") # This can now be None
@@ -111,7 +99,6 @@ async def tool_update_product_context(raw_args_from_fastmcp: Dict[str, Any], ctx
 
 @conport_mcp.tool(name="get_active_context")
 async def tool_get_active_context(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_get_active_context received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         if workspace_id_val is None:
@@ -128,7 +115,6 @@ async def tool_get_active_context(raw_args_from_fastmcp: Dict[str, Any], ctx: MC
 
 @conport_mcp.tool(name="update_active_context")
 async def tool_update_active_context(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_update_active_context received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         content_val = raw_args_from_fastmcp.get("content") # This can now be None
@@ -154,7 +140,6 @@ async def tool_update_active_context(raw_args_from_fastmcp: Dict[str, Any], ctx:
 
 @conport_mcp.tool(name="log_decision")
 async def tool_log_decision(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_log_decision received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         # Extract all fields for LogDecisionArgs
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
@@ -182,7 +167,6 @@ async def tool_log_decision(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPConte
 
 @conport_mcp.tool(name="get_decisions")
 async def tool_get_decisions(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
-    sys.stderr.write(f"MAIN.PY: tool_get_decisions received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         if workspace_id_val is None:
@@ -204,7 +188,6 @@ async def tool_get_decisions(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPCont
 
 @conport_mcp.tool(name="search_decisions_fts")
 async def tool_search_decisions_fts(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
-    sys.stderr.write(f"MAIN.PY: tool_search_decisions_fts received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         query_term_val = raw_args_from_fastmcp.get("query_term")
@@ -226,7 +209,6 @@ async def tool_search_decisions_fts(raw_args_from_fastmcp: Dict[str, Any], ctx: 
 
 @conport_mcp.tool(name="log_progress")
 async def tool_log_progress(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_log_progress received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         status_val = raw_args_from_fastmcp.get("status")
@@ -253,7 +235,6 @@ async def tool_log_progress(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPConte
 
 @conport_mcp.tool(name="get_progress")
 async def tool_get_progress(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
-    sys.stderr.write(f"MAIN.PY: tool_get_progress received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         if workspace_id_val is None:
@@ -275,7 +256,6 @@ async def tool_get_progress(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPConte
 
 @conport_mcp.tool(name="log_system_pattern")
 async def tool_log_system_pattern(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_log_system_pattern received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         name_val = raw_args_from_fastmcp.get("name")
@@ -298,7 +278,6 @@ async def tool_log_system_pattern(raw_args_from_fastmcp: Dict[str, Any], ctx: MC
 
 @conport_mcp.tool(name="get_system_patterns")
 async def tool_get_system_patterns(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
-    sys.stderr.write(f"MAIN.PY: tool_get_system_patterns received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         if workspace_id_val is None:
@@ -319,7 +298,6 @@ async def tool_get_system_patterns(raw_args_from_fastmcp: Dict[str, Any], ctx: M
 
 @conport_mcp.tool(name="log_custom_data")
 async def tool_log_custom_data(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_log_custom_data received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         category_val = raw_args_from_fastmcp.get("category")
@@ -344,7 +322,6 @@ async def tool_log_custom_data(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPCo
 
 @conport_mcp.tool(name="get_custom_data")
 async def tool_get_custom_data(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
-    sys.stderr.write(f"MAIN.PY: tool_get_custom_data received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         if workspace_id_val is None:
@@ -365,7 +342,6 @@ async def tool_get_custom_data(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPCo
 
 @conport_mcp.tool(name="delete_custom_data")
 async def tool_delete_custom_data(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_delete_custom_data received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         category_val = raw_args_from_fastmcp.get("category")
@@ -387,7 +363,6 @@ async def tool_delete_custom_data(raw_args_from_fastmcp: Dict[str, Any], ctx: MC
         raise exceptions.ContextPortalError(f"Server error processing delete_custom_data: {type(e).__name__}")
 @conport_mcp.tool(name="search_project_glossary_fts")
 async def tool_search_project_glossary_fts(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
-    sys.stderr.write(f"MAIN.PY: tool_search_project_glossary_fts received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         query_term_val = raw_args_from_fastmcp.get("query_term")
@@ -409,7 +384,6 @@ async def tool_search_project_glossary_fts(raw_args_from_fastmcp: Dict[str, Any]
 
 @conport_mcp.tool(name="export_conport_to_markdown")
 async def tool_export_conport_to_markdown(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_export_conport_to_markdown received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         if workspace_id_val is None:
@@ -429,7 +403,6 @@ async def tool_export_conport_to_markdown(raw_args_from_fastmcp: Dict[str, Any],
 
 @conport_mcp.tool(name="import_markdown_to_conport")
 async def tool_import_markdown_to_conport(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_import_markdown_to_conport received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         if workspace_id_val is None:
@@ -449,7 +422,6 @@ async def tool_import_markdown_to_conport(raw_args_from_fastmcp: Dict[str, Any],
 
 @conport_mcp.tool(name="link_conport_items")
 async def tool_link_conport_items(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_link_conport_items received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         # Extract all fields for LinkConportItemsArgs
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
@@ -483,7 +455,6 @@ async def tool_link_conport_items(raw_args_from_fastmcp: Dict[str, Any], ctx: MC
 
 @conport_mcp.tool(name="get_linked_items")
 async def tool_get_linked_items(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
-    sys.stderr.write(f"MAIN.PY: tool_get_linked_items received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         item_type_val = raw_args_from_fastmcp.get("item_type")
@@ -511,7 +482,6 @@ async def tool_get_linked_items(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPC
 
 @conport_mcp.tool(name="search_custom_data_value_fts")
 async def tool_search_custom_data_value_fts(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
-    sys.stderr.write(f"MAIN.PY: tool_search_custom_data_value_fts received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         query_term_val = raw_args_from_fastmcp.get("query_term")
@@ -536,7 +506,6 @@ async def tool_search_custom_data_value_fts(raw_args_from_fastmcp: Dict[str, Any
 
 @conport_mcp.tool(name="batch_log_items")
 async def tool_batch_log_items(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_batch_log_items received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         item_type_val = raw_args_from_fastmcp.get("item_type")
@@ -561,7 +530,6 @@ async def tool_batch_log_items(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPCo
 
 @conport_mcp.tool(name="get_item_history")
 async def tool_get_item_history(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
-    sys.stderr.write(f"MAIN.PY: tool_get_item_history received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         item_type_val = raw_args_from_fastmcp.get("item_type")
@@ -588,7 +556,6 @@ async def tool_get_item_history(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPC
 
 @conport_mcp.tool(name="delete_decision_by_id")
 async def tool_delete_decision_by_id(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_delete_decision_by_id received raw_args_from_fastmcp: {raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         decision_id_val = raw_args_from_fastmcp.get("decision_id")
@@ -602,7 +569,6 @@ async def tool_delete_decision_by_id(raw_args_from_fastmcp: Dict[str, Any], ctx:
 
 @conport_mcp.tool(name="delete_system_pattern_by_id")
 async def tool_delete_system_pattern_by_id(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_delete_system_pattern_by_id received raw_args_from_fastmcp: {raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         pattern_id_val = raw_args_from_fastmcp.get("pattern_id")
@@ -616,7 +582,6 @@ async def tool_delete_system_pattern_by_id(raw_args_from_fastmcp: Dict[str, Any]
 
 @conport_mcp.tool(name="get_conport_schema")
 async def tool_get_conport_schema(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Dict[str, Any]]:
-    sys.stderr.write(f"MAIN.PY: tool_get_conport_schema received raw_args_from_fastmcp: type={type(raw_args_from_fastmcp)}, value={raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         if workspace_id_val is None:
@@ -633,7 +598,6 @@ async def tool_get_conport_schema(raw_args_from_fastmcp: Dict[str, Any], ctx: MC
 
 @conport_mcp.tool(name="get_recent_activity_summary")
 async def tool_get_recent_activity_summary(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
-    sys.stderr.write(f"MAIN.PY: tool_get_recent_activity_summary received raw_args_from_fastmcp: {raw_args_from_fastmcp}\\n"); sys.stderr.flush()
     try:
         workspace_id_val = raw_args_from_fastmcp.get("workspace_id")
         if workspace_id_val is None:
@@ -665,21 +629,6 @@ log.info("Mounted FastMCP app at /mcp")
 async def read_root():
     return {"message": "ConPort MCP Server is running. MCP endpoint at /mcp"}
 
-# STDIO mode execution (if needed directly, though FastMCP might have its own way)
-# For now, we'll keep our stdio_run function but it won't be the primary way if using FastMCP for HTTP.
-# FastMCP's `mcp.run()` or `mcp dev` might be the new way for stdio.
-# The `pyproject.toml` script points to `cli_entry_point` which will run uvicorn for HTTP.
-# If stdio is still desired as a direct execution mode for the *packaged* tool,
-# `main_logic` would need to be adapted to call something like `conport_mcp.run(transport="stdio")`
-# instead of uvicorn.
-
-# For now, the focus is HTTP via FastMCP mounting.
-# The old stdio_mode and manual JSON-RPC message handling can be removed.
-
-# Old manual JSON-RPC handling, SSE, and stdio mode can be removed or significantly refactored
-# if FastMCP handles these transports. For now, focusing on HTTP mode via FastMCP.
-# The run_stdio_mode() might be replaced by conport_mcp.run(transport="stdio") if needed.
-sys.stderr.write(f"MAIN.PY: Value of __name__ is: '{__name__}'\\n"); sys.stderr.flush() # Simplified prefix
 
 # Determine the absolute path to the root of the ConPort server project
 # Assumes this script (main.py) is at src/context_portal_mcp/main.py
@@ -730,7 +679,6 @@ def main_logic(sys_args=None):
         uvicorn.run(app, host=args.host, port=args.port)
     elif args.mode == "stdio":
         log.info(f"Starting ConPort in STDIO mode using FastMCP for initial CLI arg workspace_id: {args.workspace_id}")
-        sys.stderr.write("MAIN.PY: Entered STDIO mode block.\\n"); sys.stderr.flush()
         
         effective_workspace_id = args.workspace_id
         if args.workspace_id == "${workspaceFolder}":
@@ -743,7 +691,6 @@ def main_logic(sys_args=None):
                 f"Ensure CWD in MCP config ('{current_cwd}') is the correct project workspace."
             )
             log.warning(warning_msg)
-            sys.stderr.write(warning_msg + "\\n"); sys.stderr.flush()
             effective_workspace_id = current_cwd
         
             # CRITICAL CHECK: Prevent creating DB in server's own directory due to misconfiguration
@@ -759,40 +706,31 @@ def main_logic(sys_args=None):
                     "for '--workspace_id' or ensure your client sets 'cwd' to your target project."
                 )
                 log.critical(error_msg)
-                sys.stderr.write(error_msg + "\\n"); sys.stderr.flush()
                 sys.exit(1)
         
-        sys.stderr.write(f"MAIN.PY: STDIO mode - Effective workspace_id for DB validation: {effective_workspace_id}\\n"); sys.stderr.flush()
-        sys.stderr.write("MAIN.PY: STDIO mode - Before DB path validation.\\n"); sys.stderr.flush()
         try:
             # from src.context_portal_mcp.core.config import get_database_path # Import happens at module level
             # get_database_path(effective_workspace_id) # EARLY VALIDATION REMOVED - Path validation and dir creation will occur on first DB access.
             
             if not effective_workspace_id or not os.path.isdir(effective_workspace_id): # Basic check if path is a directory
                  log.error(f"STDIO mode: effective_workspace_id ('{effective_workspace_id}') is not a valid directory. Please ensure client provides a correct absolute path or sets 'cwd' appropriately if using '${{workspaceFolder}}'.")
-                 sys.stderr.write(f"MAIN.PY: STDIO mode - ERROR: effective_workspace_id ('{effective_workspace_id}') is not a valid directory.\\n"); sys.stderr.flush()
                  sys.exit(1)
 
             log.info(f"STDIO mode: Using effective_workspace_id '{effective_workspace_id}'. Database directory will be created on first actual DB use.")
-            sys.stderr.write(f"MAIN.PY: STDIO mode - Effective workspace_id '{effective_workspace_id}' noted. DB dir creation deferred to first use.\\n"); sys.stderr.flush()
         except Exception as e: # Catch any other unexpected errors during this initial workspace_id handling
             log.error(f"Unexpected error processing effective_workspace_id '{effective_workspace_id}' in STDIO mode setup: {e}")
-            sys.stderr.write(f"MAIN.PY: STDIO mode - UNEXPECTED ERROR during workspace_id handling: {e}\\n"); sys.stderr.flush()
             sys.exit(1)
         
         # Note: The `FastMCP.run()` method is synchronous and will block until the server stops.
         # It requires the `mcp[cli]` extra to be installed for `mcp.server.stdio.run_server_stdio`.
-        sys.stderr.write("MAIN.PY: STDIO mode - Before conport_mcp.run(transport='stdio').\\n"); sys.stderr.flush()
         try:
             # The `settings` attribute on FastMCP can be used to pass runtime config.
             # However, `workspace_id` is not a standard FastMCP setting for `run()`.
             # It's expected to be part of the tool call parameters.
             # The primary role of --workspace_id for stdio here is for the IDE's launch config.
             conport_mcp.run(transport="stdio")
-            sys.stderr.write("MAIN.PY: STDIO mode - conport_mcp.run(transport='stdio') EXITED WITHOUT ERROR (UNEXPECTED if blocking).\\n"); sys.stderr.flush()
         except Exception as e:
             log.exception("Error running FastMCP in STDIO mode")
-            sys.stderr.write(f"MAIN.PY: STDIO mode - conport_mcp.run(transport='stdio') FAILED: {e}\\n"); sys.stderr.flush()
             sys.exit(1)
 
     else:
@@ -806,51 +744,4 @@ def cli_entry_point():
 
 if __name__ == "__main__":
     cli_entry_point()
-# else: No specific action needed if imported, FastMCP instance is available.
-# Add definition for run_stdio_mode if it was stripped in "minimal" version
-# For safety, let's ensure it's defined before it's potentially called.
-# It should be defined before the `if __name__ == "__main__":` block.
-# The diff tool might struggle with large insertions. I'll try to place it before __main__.
-# This will be a separate apply_diff if needed, or assume it's there from previous full script copy.
-# For now, this diff focuses on the __main__ block.
-# The `run_stdio_mode` was defined from lines 267-297 in the full script.
-# I will add it before the `if __name__ == "__main__":` block.
-# This requires a new SEARCH block.
-# Let's find where to insert run_stdio_mode. Before line 196 (the current stderr print before __main__ check)
-
-# This diff is getting too complex. I will do run_stdio_mode separately if needed.
-# The current diff only modifies the __main__ block.
-# The `run_stdio_mode` function was part of the "helper functions" I said were restored.
-# Let's verify `run_stdio_mode` is indeed present from the previous `read_file` (user timestamp 10:33 PM, my response 10:45 PM).
-# Yes, lines 267-297 in that full read was `def run_stdio_mode(): ...`
-# The current read (user timestamp 10:48 PM) is truncated at line 225.
-# I need to re-read the full current main.py to correctly place run_stdio_mode if it's missing
-# or to confirm its location.
-
-# For now, I will assume run_stdio_mode is defined from the previous step where I added helpers.
-# The key change is restoring full argparse in __main__.
-# And adding a stderr print before calling run_stdio_mode.
-# And ensuring the http elif uses args.host/args.port.
-# And adding the final else for invalid args.mode.
-
-# The original args.mode dispatch was:
-# if args.mode == "stdio": run_stdio_mode()
-# elif args.mode == "http": log.info(...); uvicorn.run(...)
-# else: log.error(...); sys.exit(1)
-# This needs to be restored.
-
-# The diff above correctly sets up argparse and the if/elif for stdio/http.
-# It's missing the final `else` for invalid mode from the original script.
-# And it's missing the `run_stdio_mode` definition if it was stripped.
-# The current read is truncated. I will proceed with this diff for the __main__ block,
-# and then re-evaluate based on the next full read_file.
-# The current diff changes lines 202-209 and 212.
-# It also needs to add the final `else: log.error(...); sys.exit(1)`
-
-# Let's refine the diff for the __main__ block to be more complete.
-# Original __main__ block (from a full version) was lines 302-363.
-# Current __main__ block in the read file (truncated) starts at line 201.
-# I will replace the entire current `if __name__ == "__main__":` block and its `else`.
-
-# sys.stderr.write("MINIMAL MAIN.PY: Script end reached.\\n") # Commenting out
-# sys.stderr.flush()
+ 

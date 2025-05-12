@@ -77,7 +77,7 @@ conport_memory_strategy:
   general:
     status_prefix: "Begin EVERY response with either '[CONPORT_ACTIVE]' or '[CONPORT_INACTIVE]' to indicate ConPort system status."
     proactive_logging_cue: "Throughout the conversation, identify opportunities to log or update project information in the ConPort system (e.g., if the user outlines a new plan, makes a decision, or defines a term). ALWAYS confirm with the user before logging new information or making updates to ConPort, explaining what you intend to save."
-    workspace_id_note: "All interactions with the ConPort system require the `ACTUAL_WORKSPACE_ID`."
+    workspace_id_note: "All interactions with the ConPort system require the `ACTUAL_WORKSPACE_ID`. Note: When interacting with ConPort (which often uses the FastMCP library), tool-specific arguments like `ACTUAL_WORKSPACE_ID` are typically nested within a `raw_args_from_fastmcp` field in the actual request payload. The schema obtained from `get_conport_schema` should confirm this structure."
     schema_discovery_note: "CRITICAL: The ConPort system provides a 'get_conport_schema' operation. Use this at the start of the session (after confirming ConPort availability) to discover all available ConPort operations, their exact names, and required/optional parameters. Subsequent interactions described below should use the information obtained from this schema."
 
   conport_conceptual_interactions:

@@ -135,7 +135,7 @@ Imagine your `context-portal` repository is cloned at `/home/youruser/projects/c
 ```json
 {
   "mcpServers": {
-    "conport-stdio": {
+    "conport": {
       "command": "/home/youruser/projects/context-portal/.venv/bin/python",
       "args": [
         "/home/youruser/projects/context-portal/src/context_portal_mcp/main.py",
@@ -157,7 +157,7 @@ Note the use of double backslashes `\\` for paths in JSON strings.
 ```json
 {
   "mcpServers": {
-    "conport-stdio": {
+    "conport": {
       "command": "C:\\Users\\YourUser\\Projects\\context-portal\\.venv\\Scripts\\python.exe",
       "args": [
         "C:\\Users\\YourUser\\Projects\\context-portal\\src\\context_portal_mcp\\main.py",
@@ -175,47 +175,6 @@ Note the use of double backslashes `\\` for paths in JSON strings.
 *   **`--workspace_id "${workspaceFolder}"`**: This tells ConPort which project's context to manage. `${workspaceFolder}` should be resolved by your IDE to the current project's root path.
 
 **Key Takeaway:** For STDIO mode, ConPort critically relies on an accurate `--workspace_id` to identify the target project. Ensure this argument correctly resolves to the absolute path of your project workspace, either through IDE variables like `${workspaceFolder}` or by providing a direct absolute path.
-### Full Windows Configuration Examples:
-
-**1. Recommended (Direct Python Invocation):**
-Assuming `context-portal` is cloned to `C:\Users\YourUser\Projects\context-portal`:
-
-```json
-{
-  "mcpServers": {
-    "conport-stdio": {
-      "command": "C:\\Users\\YourUser\\Projects\\context-portal\\.venv\\Scripts\\python.exe",
-      "args": [
-        "C:\\Users\\YourUser\\Projects\\context-portal\\src\\context_portal_mcp\\main.py",
-        "--mode",
-        "stdio",
-        "--workspace_id",
-        "${workspaceFolder}"
-      ]
-    }
-  }
-}
-```
-*Refer to the main "Recommended Configuration (Direct Python Invocation)" section above for details on the `command`, `args`, and `workspace_id` parameters.*
-**2. Alternative (No `cwd`, Full Absolute Paths):**
-Assuming `context-portal` is cloned to `C:\Users\YourUser\Projects\context-portal` and your target project is `C:\Users\YourUser\MyProject`:
-
-```json
-{
-  "mcpServers": {
-    "conport-stdio": {
-      "command": "C:\\Users\\YourUser\\Projects\\context-portal\\.venv\\Scripts\\python.exe",
-      "args": [
-        "C:\\Users\\YourUser\\Projects\\context-portal\\src\\context_portal_mcp\\main.py",
-        "--mode",
-        "stdio",
-        "--workspace_id",
-        "C:\\Users\\YourUser\\MyProject" // Must be absolute path to target project
-      ]
-    }
-  }
-}
-```
 
 ## Usage with LLM Agents (Custom Instructions)
 

@@ -361,7 +361,7 @@ The server is primarily run in **STDIO Mode**. This mode is intended for direct 
         ```
     *   Or using the CLI entry point:
         ```bash
-        conport-server --mode stdio --workspace_id "/path/to/your/workspace"
+        conport --mode stdio --workspace_id "/path/to/your/workspace"
         ```
     *   **Note on `workspace_id` in STDIO mode:** The server includes logic to detect if `${workspaceFolder}` is passed literally (i.e., not expanded by the client) and will fall back to using the current working directory as the `workspace_id` in such cases, with a warning.
 

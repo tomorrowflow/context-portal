@@ -34,15 +34,3 @@ def get_database_path(workspace_id: str) -> pathlib.Path:
     db_path = db_dir / "context.db"
     log.debug(f"Constructed db_path: {db_path}")
     return db_path
-
-# Example usage (can be removed later)
-if __name__ == "__main__":
-    try:
-        # Replace with a valid path for testing
-        test_workspace = "/home/scottymac/workspaces/context-portal"
-        path = get_database_path(test_workspace)
-        print(f"Database path for '{test_workspace}': {path}")
-    except ValueError as e:
-        print(f"Error: {e}")
-    except Exception as e:
-         print(f"An unexpected error occurred: {e}")
