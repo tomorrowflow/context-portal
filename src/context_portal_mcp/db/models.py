@@ -306,6 +306,33 @@ class GetRecentActivitySummaryArgs(BaseArgs):
             pass # Allow both to be None, handler can set a default (e.g. 24 hours)
         return values
 
+# --- Semantic Search Tool Args ---
+
+class SemanticSearchConportArgs(BaseArgs):
+    """Arguments for performing a semantic search across ConPort data."""
+    query_text: str = Field(..., min_length=1, description="The natural language query text for semantic search.")
+    top_k: int = Field(default=5, ge=1, le=25, description="Number of top results to return.") # Max 25 for now
+    filter_item_types: Optional[List[str]] = Field(default=None, description="Optional list of item types to filter by (e.g., ['decision', 'custom_data']). Valid types: 'decision', 'system_pattern', 'custom_data', 'progress_entry'.")
+    filter_tags_include_any: Optional[List[str]] = Field(default=None, description="Optional list of tags; results will include items matching any of these tags.")
+    filter_tags_include_all: Optional[List[str]] = Field(default=None, description="Optional list of tags; results will include only items matching all of these tags.")
+    filter_custom_data_categories: Optional[List[str]] = Field(default=None, description="Optional list of categories to filter by if 'custom_data' is in filter_item_types.")
+
+    @model_validator(mode='before')
+    @classmethod
+    def check_tag_filters(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        if values.get('filter_tags_include_all') and values.get('filter_tags_include_any'):
+            raise ValueError("Cannot use 'filter_tags_include_all' and 'filter_tags_include_any' simultaneously.")
+        return values
+
+    @model_validator(mode='before')
+    @classmethod
+    def check_custom_data_category_filter(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        item_types = values.get('filter_item_types')
+        category_filter = values.get('filter_custom_data_categories')
+        if category_filter and (not item_types or 'custom_data' not in item_types):
+            raise ValueError("'filter_custom_data_categories' can only be used if 'custom_data' is included in 'filter_item_types'.")
+        return values
+
 # Dictionary mapping tool names to their expected argument models (for potential future use/validation)
 # Note: The primary validation happens in the handler using these models.
 TOOL_ARG_MODELS = {
@@ -334,5 +361,6 @@ TOOL_ARG_MODELS = {
     "batch_log_items": BatchLogItemsArgs,
     "get_item_history": GetItemHistoryArgs,
     "get_conport_schema": GetConportSchemaArgs,
-    "get_recent_activity_summary": GetRecentActivitySummaryArgs, # New tool
+    "get_recent_activity_summary": GetRecentActivitySummaryArgs,
+    "semantic_search_conport": SemanticSearchConportArgs, # New tool
 }

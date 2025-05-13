@@ -13,8 +13,10 @@ from pydantic import ValidationError
 from ..db import database as db
 from ..db import models
 from ..core.exceptions import ToolArgumentError, DatabaseError, ContextPortalError
+from ..core import embedding_service # Added for semantic search
+from ..db import vector_store_service # Added for semantic search
 
-log = logging.getLogger(__name__) # Add logger instance
+log = logging.getLogger(__name__)
 
 # --- Tool Handler Functions ---
 
@@ -69,6 +71,37 @@ def handle_log_decision(args: models.LogDecisionArgs) -> Dict[str, Any]:
             # Timestamp is added automatically by the Pydantic model's default_factory
         )
         logged_decision = db.log_decision(args.workspace_id, decision_to_log)
+
+        # --- Add to Vector Store ---
+        if logged_decision and logged_decision.id is not None:
+            try:
+                text_to_embed = f"Decision Summary: {logged_decision.summary}\n"
+                if logged_decision.rationale:
+                    text_to_embed += f"Rationale: {logged_decision.rationale}\n"
+                if logged_decision.implementation_details:
+                    text_to_embed += f"Implementation Details: {logged_decision.implementation_details}"
+                
+                vector = embedding_service.get_embedding(text_to_embed.strip())
+                
+                metadata_for_vector = {
+                    "conport_item_id": str(logged_decision.id),
+                    "conport_item_type": "decision",
+                    "summary": logged_decision.summary,
+                    "timestamp_created": logged_decision.timestamp.isoformat(),
+                    "tags": logged_decision.tags if logged_decision.tags else []
+                }
+                vector_store_service.upsert_item_embedding(
+                    workspace_id=args.workspace_id,
+                    item_type="decision",
+                    item_id=str(logged_decision.id),
+                    vector=vector,
+                    metadata=metadata_for_vector
+                )
+                log.info(f"Successfully generated and stored embedding for decision ID {logged_decision.id}")
+            except Exception as e_embed:
+                log.error(f"Failed to generate/store embedding for decision ID {logged_decision.id}: {e_embed}", exc_info=True)
+        # --- End Add to Vector Store ---
+        
         return logged_decision.model_dump(mode='json')
     except DatabaseError as e:
         raise ContextPortalError(f"Database error logging decision: {e}")
@@ -184,6 +217,33 @@ def handle_log_progress(args: models.LogProgressArgs) -> Dict[str, Any]:
                 log.error(f"Failed to automatically link progress entry ID {logged_progress.id} for workspace {args.workspace_id}: {link_e}")
                 # Optionally, add this error to the response if the MCP tool schema supports it
 
+        # --- Add to Vector Store ---
+        if logged_progress and logged_progress.id is not None:
+            try:
+                text_to_embed = f"Progress: {logged_progress.status} - {logged_progress.description}"
+                
+                vector = embedding_service.get_embedding(text_to_embed.strip())
+                
+                metadata_for_vector = {
+                    "conport_item_id": str(logged_progress.id),
+                    "conport_item_type": "progress_entry",
+                    "status": logged_progress.status,
+                    "description_snippet": logged_progress.description[:100], # Snippet for quick view
+                    "timestamp_created": logged_progress.timestamp.isoformat(),
+                    "parent_id": str(logged_progress.parent_id) if logged_progress.parent_id else None
+                }
+                vector_store_service.upsert_item_embedding(
+                    workspace_id=args.workspace_id,
+                    item_type="progress_entry",
+                    item_id=str(logged_progress.id),
+                    vector=vector,
+                    metadata=metadata_for_vector
+                )
+                log.info(f"Successfully generated and stored embedding for progress entry ID {logged_progress.id}")
+            except Exception as e_embed:
+                log.error(f"Failed to generate/store embedding for progress entry ID {logged_progress.id}: {e_embed}", exc_info=True)
+        # --- End Add to Vector Store ---
+
         return logged_progress.model_dump(mode='json')
     except DatabaseError as e:
         raise ContextPortalError(f"Database error logging progress: {e}")
@@ -220,6 +280,33 @@ def handle_log_system_pattern(args: models.LogSystemPatternArgs) -> Dict[str, An
     try:
         pattern_to_log = models.SystemPattern(name=args.name, description=args.description, tags=args.tags)
         logged_pattern = db.log_system_pattern(args.workspace_id, pattern_to_log)
+
+        # --- Add to Vector Store ---
+        if logged_pattern and logged_pattern.id is not None:
+            try:
+                text_to_embed = f"System Pattern: {logged_pattern.name}\nDescription: {logged_pattern.description if logged_pattern.description else ''}"
+                
+                vector = embedding_service.get_embedding(text_to_embed.strip())
+                
+                metadata_for_vector = {
+                    "conport_item_id": str(logged_pattern.id),
+                    "conport_item_type": "system_pattern",
+                    "name": logged_pattern.name,
+                    "timestamp_created": logged_pattern.timestamp.isoformat(), # Assuming SystemPattern has a timestamp
+                    "tags": logged_pattern.tags if logged_pattern.tags else []
+                }
+                vector_store_service.upsert_item_embedding(
+                    workspace_id=args.workspace_id,
+                    item_type="system_pattern",
+                    item_id=str(logged_pattern.id),
+                    vector=vector,
+                    metadata=metadata_for_vector
+                )
+                log.info(f"Successfully generated and stored embedding for system pattern ID {logged_pattern.id}")
+            except Exception as e_embed:
+                log.error(f"Failed to generate/store embedding for system pattern ID {logged_pattern.id}: {e_embed}", exc_info=True)
+        # --- End Add to Vector Store ---
+
         return logged_pattern.model_dump(mode='json')
     except DatabaseError as e:
         raise ContextPortalError(f"Database error logging system pattern: {e}")
@@ -299,7 +386,60 @@ def handle_log_custom_data(args: models.LogCustomDataArgs) -> Dict[str, Any]:
     """
     try:
         data_to_log = models.CustomData(category=args.category, key=args.key, value=args.value)
+        # Assuming CustomData model has a metadata field, or we add it if needed for cache_hint
+        # For now, the LogCustomDataArgs does not have metadata.
+        # If it did: data_to_log = models.CustomData(category=args.category, key=args.key, value=args.value, metadata=args.metadata)
+        
         logged_data = db.log_custom_data(args.workspace_id, data_to_log)
+
+        # --- Add to Vector Store ---
+        if logged_data and logged_data.id is not None:
+            # Only embed if value is string-like or can be reasonably converted to text
+            text_to_embed = None
+            if isinstance(logged_data.value, str):
+                text_to_embed = logged_data.value
+            elif isinstance(logged_data.value, (dict, list)):
+                try:
+                    # Simple JSON string representation for dict/list
+                    text_to_embed = json.dumps(logged_data.value)
+                except TypeError:
+                    log.warning(f"Custom data value for {logged_data.category}/{logged_data.key} is not JSON serializable for embedding.")
+            
+            if text_to_embed:
+                # Add category and key to text for better contextual embedding
+                contextual_text_to_embed = f"Category: {logged_data.category}\nKey: {logged_data.key}\nValue: {text_to_embed}"
+                try:
+                    vector = embedding_service.get_embedding(contextual_text_to_embed.strip())
+                    
+                    metadata_for_vector = {
+                        "conport_item_id": str(logged_data.id),
+                        "conport_item_type": "custom_data",
+                        "category": logged_data.category,
+                        "key": logged_data.key,
+                        "timestamp_created": logged_data.timestamp.isoformat(),
+                        # "value_type": str(type(logged_data.value).__name__) # Could be useful metadata
+                    }
+                    # Add metadata from CustomData if it exists and is simple
+                    if hasattr(logged_data, 'metadata') and isinstance(logged_data.metadata, dict):
+                         for k, v in logged_data.metadata.items():
+                            if isinstance(v, (str, int, float, bool)): # Only simple types for Chroma metadata
+                                metadata_for_vector[f"custom_meta_{k}"] = v
+
+
+                    vector_store_service.upsert_item_embedding(
+                        workspace_id=args.workspace_id,
+                        item_type="custom_data",
+                        item_id=str(logged_data.id), # Using internal DB ID as part of Chroma ID
+                        vector=vector,
+                        metadata=metadata_for_vector
+                    )
+                    log.info(f"Successfully generated and stored embedding for custom_data ID {logged_data.id} ({logged_data.category}/{logged_data.key})")
+                except Exception as e_embed:
+                    log.error(f"Failed to generate/store embedding for custom_data ID {logged_data.id} ({logged_data.category}/{logged_data.key}): {e_embed}", exc_info=True)
+            else:
+                log.debug(f"Skipping embedding for custom_data ID {logged_data.id} ({logged_data.category}/{logged_data.key}) as value is not text-like.")
+        # --- End Add to Vector Store ---
+        
         return logged_data.model_dump(mode='json')
     except DatabaseError as e:
         raise ContextPortalError(f"Database error logging custom data: {e}")
@@ -379,6 +519,99 @@ def handle_search_custom_data_value_fts(args: models.SearchCustomDataValueArgs) 
     except Exception as e:
         log.exception(f"Unexpected error in search_custom_data_value_fts for workspace {args.workspace_id}")
         raise ContextPortalError(f"Unexpected error searching custom data values: {e}")
+
+# --- Semantic Search Handler ---
+
+async def handle_semantic_search_conport(args: models.SemanticSearchConportArgs) -> List[Dict[str, Any]]:
+    """
+    Handles the 'semantic_search_conport' MCP tool.
+    Performs a semantic search using embeddings and vector store, with optional metadata filters.
+    """
+    try:
+        log.info(f"Handling semantic_search_conport for workspace {args.workspace_id} with query: '{args.query_text[:50]}...'")
+
+        query_vector = embedding_service.get_embedding(args.query_text)
+
+        # Construct ChromaDB filters
+        chroma_filters = {}
+        and_conditions = []
+
+        if args.filter_item_types:
+            and_conditions.append({"conport_item_type": {"$in": args.filter_item_types}})
+        
+        if args.filter_tags_include_all:
+            # For $all behavior with $contains, we need an $and for each tag
+            tag_all_conditions = [{"tags": {"$contains": tag}} for tag in args.filter_tags_include_all]
+            if tag_all_conditions:
+                and_conditions.append({"$and": tag_all_conditions})
+        
+        if args.filter_tags_include_any:
+            # For $or behavior with $contains
+            tag_any_conditions = [{"tags": {"$contains": tag}} for tag in args.filter_tags_include_any]
+            if tag_any_conditions:
+                and_conditions.append({"$or": tag_any_conditions})
+        
+        if args.filter_custom_data_categories:
+            # This filter is only meaningful if 'custom_data' is in item_types or no item_types are specified
+            category_condition = {"category": {"$in": args.filter_custom_data_categories}}
+            if args.filter_item_types and 'custom_data' in args.filter_item_types:
+                and_conditions.append(category_condition)
+            elif not args.filter_item_types: # If no item_type filter, apply category filter broadly (might hit non-custom_data items if they had 'category' metadata)
+                 and_conditions.append(category_condition)
+
+
+        if and_conditions:
+            if len(and_conditions) == 1:
+                chroma_filters = and_conditions[0]
+            else:
+                chroma_filters = {"$and": and_conditions}
+        
+        log.debug(f"ChromaDB query filters: {chroma_filters}")
+
+        search_results = vector_store_service.query_vector_store(
+            workspace_id=args.workspace_id,
+            query_vector=query_vector,
+            top_k=args.top_k,
+            filters=chroma_filters if chroma_filters else None
+        )
+
+        # Process results: search_results is List[Dict] with 'chroma_doc_id', 'distance', 'metadata'
+        # We need to potentially fetch full items from SQLite based on metadata.conport_item_id and conport_item_type
+        # For now, just return the direct results from vector store, which includes metadata.
+        # A more advanced version would re-hydrate with full SQLite objects.
+        
+        # Example of enriching results (conceptual, actual DB calls would be needed)
+        enriched_results = []
+        for res in search_results:
+            meta = res.get("metadata", {})
+            item_id = meta.get("conport_item_id")
+            item_type = meta.get("conport_item_type")
+            
+            # Here you could fetch the full item from SQLite using item_id and item_type
+            # For example:
+            # if item_type == "decision" and item_id:
+            #     full_item = db.get_decision_by_id(args.workspace_id, int(item_id)) # Assuming get_decision_by_id exists
+            #     res["full_item_data"] = full_item.model_dump(mode='json') if full_item else None
+            # else if item_type == "custom_data" and item_id:
+            #     # For custom_data, ID is internal. Key and Category are in metadata.
+            #     full_item_list = db.get_custom_data(args.workspace_id, category=meta.get("category"), key=meta.get("key"))
+            #     if full_item_list:
+            #         res["full_item_data"] = full_item_list[0].model_dump(mode='json')
+
+
+            enriched_results.append(res) # For now, just pass through
+
+        return enriched_results
+
+    except RuntimeError as re: # Catch errors from embedding or vector store service
+        log.error(f"Runtime error during semantic search: {re}", exc_info=True)
+        raise ContextPortalError(f"Error during semantic search operation: {re}")
+    except DatabaseError as dbe: # Catch errors from SQLite if enriching results
+        log.error(f"Database error during semantic search result enrichment: {dbe}", exc_info=True)
+        raise ContextPortalError(f"Database error processing semantic search results: {dbe}")
+    except Exception as e:
+        log.exception(f"Unexpected error in handle_semantic_search_conport for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error during semantic search: {type(e).__name__}")
 
 # --- Export Tool Handler ---
 
@@ -882,13 +1115,28 @@ def handle_delete_decision_by_id(args: models.DeleteDecisionByIdArgs) -> Dict[st
     Deletes a decision by its ID.
     """
     try:
-        deleted = db.delete_decision_by_id(args.workspace_id, args.decision_id)
-        if deleted:
-            return {"status": "success", "message": f"Decision ID {args.decision_id} deleted successfully."}
+        deleted_from_db = db.delete_decision_by_id(args.workspace_id, args.decision_id)
+        
+        if deleted_from_db:
+            try:
+                vector_store_service.delete_item_embedding(
+                    workspace_id=args.workspace_id,
+                    item_type="decision",
+                    item_id=str(args.decision_id)
+                )
+                log.info(f"Successfully deleted embedding for decision ID {args.decision_id}")
+                return {"status": "success", "message": f"Decision ID {args.decision_id} and its embedding deleted successfully."}
+            except Exception as e_vec_del:
+                log.error(f"Failed to delete embedding for decision ID {args.decision_id} (DB record was deleted): {e_vec_del}", exc_info=True)
+                # Return success for DB deletion but acknowledge embedding deletion failure.
+                return {
+                    "status": "partial_success",
+                    "message": f"Decision ID {args.decision_id} deleted from database, but failed to delete its embedding: {e_vec_del}"
+                }
         else:
-            # This case means the ID was valid (e.g. integer) but not found.
-            # Consider if this should be an error or a specific status. For now, success with message.
-            return {"status": "success", "message": f"Decision ID {args.decision_id} not found."}
+            # This case means the ID was valid (e.g. integer) but not found in DB.
+            # No need to attempt vector deletion if not found in DB.
+            return {"status": "success", "message": f"Decision ID {args.decision_id} not found in database."}
     except DatabaseError as e:
         raise ContextPortalError(f"Database error deleting decision ID {args.decision_id}: {e}")
     except Exception as e:
@@ -901,11 +1149,25 @@ def handle_delete_system_pattern_by_id(args: models.DeleteSystemPatternByIdArgs)
     Deletes a system pattern by its ID.
     """
     try:
-        deleted = db.delete_system_pattern_by_id(args.workspace_id, args.pattern_id)
-        if deleted:
-            return {"status": "success", "message": f"System pattern ID {args.pattern_id} deleted successfully."}
+        deleted_from_db = db.delete_system_pattern_by_id(args.workspace_id, args.pattern_id)
+        
+        if deleted_from_db:
+            try:
+                vector_store_service.delete_item_embedding(
+                    workspace_id=args.workspace_id,
+                    item_type="system_pattern",
+                    item_id=str(args.pattern_id)
+                )
+                log.info(f"Successfully deleted embedding for system pattern ID {args.pattern_id}")
+                return {"status": "success", "message": f"System pattern ID {args.pattern_id} and its embedding deleted successfully."}
+            except Exception as e_vec_del:
+                log.error(f"Failed to delete embedding for system pattern ID {args.pattern_id} (DB record was deleted): {e_vec_del}", exc_info=True)
+                return {
+                    "status": "partial_success",
+                    "message": f"System pattern ID {args.pattern_id} deleted from database, but failed to delete its embedding: {e_vec_del}"
+                }
         else:
-            return {"status": "success", "message": f"System pattern ID {args.pattern_id} not found."}
+            return {"status": "success", "message": f"System pattern ID {args.pattern_id} not found in database."}
     except DatabaseError as e:
         raise ContextPortalError(f"Database error deleting system pattern ID {args.pattern_id}: {e}")
     except Exception as e:

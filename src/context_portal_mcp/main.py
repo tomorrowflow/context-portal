@@ -619,6 +619,33 @@ async def tool_get_recent_activity_summary(raw_args_from_fastmcp: Dict[str, Any]
         log.error(f"Error processing args for get_recent_activity_summary: {e}. Received raw: {raw_args_from_fastmcp}")
         raise exceptions.ContextPortalError(f"Server error processing get_recent_activity_summary: {type(e).__name__}")
 
+@conport_mcp.tool(name="semantic_search_conport")
+async def tool_semantic_search_conport(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> List[Dict[str, Any]]:
+    """
+    MCP tool wrapper for semantic_search_conport.
+    It validates arguments using SemanticSearchConportArgs Pydantic model and calls the handler.
+    """
+    try:
+        # Pydantic model will parse and validate the raw dictionary.
+        # FastMCP typically passes the raw dict as the first arg.
+        log.debug(f"semantic_search_conport raw_args: {raw_args_from_fastmcp}")
+        pydantic_args = models.SemanticSearchConportArgs(**raw_args_from_fastmcp)
+        # The handler should be async to be awaited here.
+        # If mcp_handlers.handle_semantic_search_conport is not async,
+        # it would need to be run in a thread pool executor for a truly async app.
+        # For now, assuming it will be made async or FastMCP handles sync handlers appropriately.
+        return await mcp_handlers.handle_semantic_search_conport(pydantic_args)
+    except exceptions.ToolArgumentError as e: # Catch validation errors from Pydantic model itself
+        log.error(f"Argument validation error for semantic_search_conport: {e}. Received raw: {raw_args_from_fastmcp}")
+        # Re-raise as ContextPortalError or let FastMCP handle it if it maps ValidationError
+        raise exceptions.ContextPortalError(f"Invalid arguments for semantic_search_conport: {e}")
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in semantic_search_conport handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Unexpected error processing args for semantic_search_conport: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing semantic_search_conport: {type(e).__name__} - {e}")
+
 # Mount the FastMCP SSE app to the FastAPI app at the /mcp path
 # This will handle GET for SSE and POST for JSON-RPC client requests
 app.mount("/mcp", conport_mcp.sse_app())

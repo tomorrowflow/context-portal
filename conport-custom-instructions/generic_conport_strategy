@@ -481,6 +481,96 @@ conport_memory_strategy:
       4. Summarize: After processing updates, briefly inform the USER that the project memory (ConPort) has been synchronized with information from the current session.
     example_flow_note: "This process is iterative. You might make several distinct interactions with the ConPort system sequentially to fully capture all relevant updates from the conversation."
 
+  dynamic_context_retrieval_for_rag:
+    title: "Dynamic Context Retrieval for Enhanced Responses (RAG-like Approach)"
+    description: |
+      This strategy guides a generic AI agent in dynamically retrieving and assembling context from the ConPort system
+      to answer user queries or perform tasks more effectively. This approach is akin to Retrieval Augmented Generation (RAG)
+      and should be used in conjunction with the agent's native capabilities (e.g., file system access, web search if applicable).
+    trigger: "When the agent needs to answer a specific question, perform a task requiring detailed project knowledge stored in ConPort, or generate content based on ConPort data."
+    goal: "To construct a concise, highly relevant context set from ConPort to inform the agent's reasoning and response generation, improving accuracy and relevance."
+    schema_adherence_note: "CRITICAL: All ConPort operations mentioned conceptually below (e.g., 'Perform Search Decisions (FTS)') MUST be invoked using the actual tool names and parameter structures discovered via the 'Get ConPort Schema' operation at the start of the session."
+    user_communication_note: "Remember to follow the `user_communication_protocol` (explain intent to USER, no operation names to USER) when performing these steps."
+    steps:
+      - step: 1
+        action: "Analyze User Query/Task"
+        details: "Deconstruct the user's request to identify key entities, concepts, keywords, and the specific type of information likely stored in ConPort."
+      - step: 2
+        action: "Prioritized Retrieval Strategy (Conceptual ConPort Operations)"
+        details: |
+          Based on the analysis, select the most appropriate conceptual ConPort operations. Consult the discovered schema for available tools that match these concepts:
+          - **Targeted Search:** Look for schema operations corresponding to 'Search Decisions (FTS)', 'Search Custom Data (FTS)', or 'Search Project Glossary (FTS)' for keyword-based searches.
+          - **Specific Item Retrieval:** Look for schema operations like 'Get Custom Data' (if category/key known), 'Get Decision' (by ID), 'Get System Pattern', 'Get Progress Entry' if the query points to specific item types or known identifiers.
+          - **(Future):** If the ConPort schema indicates semantic search capabilities, prioritize those for conceptual queries.
+          - **Broad Context (Fallback):** Use operations like 'Get Product Context' or 'Get Active Context' as a fallback if targeted retrieval yields little, but be mindful of their size.
+          - **Complementary Native Capabilities:** Determine if the agent's native capabilities (e.g., reading files specified in ConPort data, searching its own knowledge if applicable) can supplement the information from ConPort.
+      - step: 3
+        action: "Retrieve Initial Set from ConPort"
+        details: "AGENT_ACTION: Invoke the chosen ConPort operation(s) (using actual tool names from schema) to retrieve an initial, small set (e.g., top 3-5) of the most relevant items. Remember to explain intent to USER before any ConPort interaction."
+      - step: 4
+        action: "Contextual Expansion via ConPort Linking (Optional)"
+        details: "For the most promising items from Step 3, if the ConPort schema includes an operation like 'Get Linked Items', consider using it to fetch directly related items (1-hop). This can provide crucial context. Use judiciously."
+      - step: 5
+        action: "Synthesize and Filter Retrieved Information"
+        details: |
+          Review the information retrieved from ConPort (initial set + expanded context).
+          - **Filter:** Discard irrelevant items or parts of items.
+          - **Synthesize/Summarize:** If multiple relevant pieces of information are found, synthesize them into a concise summary that directly addresses the query/task.
+          - **Integrate Native Findings:** If native capabilities were used (e.g., reading a file whose path was found in ConPort), integrate relevant snippets here.
+      - step: 6
+        action: "Formulate Response Using Assembled Context"
+        details: |
+          Use the filtered and synthesized information to formulate the response to the USER.
+          - **Attribution (Conceptual):** The agent's internal reasoning should be based on specific ConPort sources. The explanation of *why* it's doing something (as per `user_communication_protocol`) can hint at the type of source (e.g., "Based on the project's logged decisions...").
+          - **Brevity:** Strive for relevance and conciseness in the information used for response generation.
+    general_principles:
+      - "Prefer targeted retrieval from ConPort over broad context dumps."
+      - "Iterate if initial retrieval is insufficient: try different keywords or conceptual operations (mapped to schema tools)."
+      - "Balance context richness with response clarity and any LLM token limits the agent operates under."
+
+  proactive_knowledge_graph_linking:
+    title: "Proactive Knowledge Graph Linking (Generic Agent)"
+    description: |
+      This strategy guides a generic AI agent to proactively identify and suggest the creation of links
+      between ConPort items, enriching the project's knowledge graph based on conversational context.
+    trigger: "During ongoing conversation, when the agent observes potential relationships (e.g., causal, implementational, clarifying) between two or more discussed ConPort items or concepts that are likely represented as ConPort items."
+    goal: "To actively build and maintain a rich, interconnected knowledge graph within ConPort by capturing relationships that might otherwise be missed."
+    schema_adherence_note: "CRITICAL: All ConPort operations mentioned conceptually below (e.g., 'Perform Link ConPort Items') MUST be invoked using the actual tool names and parameter structures discovered via the 'Get ConPort Schema' operation."
+    user_communication_note: "Remember to follow the `user_communication_protocol` (explain intent to USER, no operation names to USER) when performing these steps."
+    steps:
+      - step: 1
+        action: "Monitor Conversational Context"
+        details: "Continuously analyze the user's statements and the flow of discussion for mentions of ConPort items (explicitly by ID, or implicitly by well-known names/summaries) and the relationships being described or implied between them."
+      - step: 2
+        action: "Identify Potential Links"
+        details: |
+          Look for patterns such as:
+          - User states "Decision X led to us doing Y (which is Progress item P-3)."
+          - User discusses how System Pattern SP-2 helps address a concern noted in Decision D-5.
+      - step: 3
+        action: "Formulate and Propose Link Suggestion"
+        details: |
+          If a potential link is identified:
+          - Clearly state the items involved (e.g., "Decision D-5", "System Pattern SP-2").
+          - Describe the perceived relationship (e.g., "It seems SP-2 addresses a concern in D-5.").
+          - AGENT_ACTION: Propose creating a link using your platform's question-asking mechanism.
+          - Example Question to User: "I noticed we're discussing [Item A concept/ID] and [Item B concept/ID]. It sounds like [Item A] might '[proposed relationship, e.g., address a concern in]' [Item B]. Would you like me to create this link in the ConPort project memory? You can also suggest a different relationship type."
+          - Provide example relationship types if helpful: 'implements', 'clarifies', 'related_to', 'depends_on', 'blocks', 'resolves', 'derived_from'.
+      - step: 4
+        action: "Gather Details and Execute Linking via ConPort"
+        details: |
+          If the user confirms:
+          - Ensure you have the correct source item type (e.g., "decision", "system_pattern"), source item ID, target item type, target item ID, and the agreed-upon relationship type.
+          - Ask for an optional brief description for the link if the relationship isn't obvious.
+          - AGENT_ACTION: Invoke the ConPort operation corresponding to 'Link ConPort Items' (using the tool name and parameters from the discovered schema).
+      - step: 5
+        action: "Confirm Outcome"
+        details: "Inform the USER of the success or failure of the ConPort linking operation call."
+    general_principles:
+      - "Be helpful, not intrusive. If the user declines a suggestion, accept and move on."
+      - "Prioritize clear, strong relationships over tenuous ones."
+      - "This strategy complements the general `proactive_logging_cue` by providing specific guidance for link creation."
+
   reconfigure_core_guidance:
     product_active_context: "The internal JSON structure of 'Product Context' and 'Active Context' (typically a `content` field) is flexible. Work with the user to define/evolve this structure via 'Update Product Context' and 'Update Active Context' operations. The ConPort server stores this `content` as a JSON blob. Consult the schema for details on how to provide this `content` (e.g., full object or patch)."
     decisions_progress_patterns: "The fundamental fields for Decisions, Progress Entries, and System Patterns are usually fixed by ConPort's design (discoverable via its schema). For significantly different structures or additional fields not supported by the dedicated operations, guide the user to create a new 'Custom Data' category (e.g., category: 'project_milestones_detailed', with a custom JSON `value`)."

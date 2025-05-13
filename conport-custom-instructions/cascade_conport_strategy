@@ -433,6 +433,98 @@ cascade_conport_integration:
     example_flow_note: |
       Process is iterative; multiple ConPort operation calls may be needed per sync.
 
+  dynamic_context_retrieval_for_rag:
+    title: "Dynamic Context Retrieval for Enhanced Responses (RAG-like)"
+    description: |
+      This strategy guides Windsurf Cascade in dynamically retrieving and assembling context from the ConPort project memory
+      to answer user queries or perform tasks more effectively, akin to Retrieval Augmented Generation (RAG).
+      This complements your native file system and codebase search tools.
+    trigger: "When you need to answer a specific question, perform a task requiring detailed project knowledge from ConPort, or generate content based on ConPort data."
+    goal: "To construct a concise, highly relevant context set from ConPort to inform your responses, improving accuracy and relevance."
+    adherence_note: "Remember to follow all rules in `interaction_protocol` (explain intent to USER, no operation names to USER, tool call at end) when performing these steps."
+    steps:
+      - step: 1
+        action: "Analyze User Query/Task"
+        details: "Deconstruct the user's request to identify key entities, concepts, keywords, and the specific type of information needed from ConPort."
+      - step: 2
+        action: "Prioritized Retrieval Strategy (ConPort Operations)"
+        details: |
+          Based on the analysis, select the most appropriate ConPort operations (refer to `conport_operations_reference` for call structures):
+          - **Targeted FTS:** Use `search_decisions_fts`, `search_project_glossary_fts` (or a more general `search_custom_data_value_fts` if available and appropriate for other categories) for keyword-based searches.
+          - **Specific Item Retrieval:** Use `get_custom_data` (if category/key known), `get_decisions` (by ID or for recent items), `get_system_patterns`, `get_progress` if the query points to specific item types or IDs.
+          - **(Future):** Prioritize semantic search operations from ConPort once available for conceptual queries.
+          - **Broad Context (Fallback):** Use `get_product_context` or `get_active_context` as a fallback if targeted retrieval yields little, but be mindful of their size.
+          - **Complementary Native Tools:** Consider if your native `Codebase Search` or `Find` tools can locate relevant file paths or code snippets that might be logged or referenced in ConPort.
+      - step: 3
+        action: "Retrieve Initial Set from ConPort"
+        details: "Invoke the chosen ConPort operation(s) to retrieve an initial, small set (e.g., top 3-5) of the most relevant items or data snippets. Remember to explain intent to USER before calling."
+      - step: 4
+        action: "Contextual Expansion via ConPort Linking (Optional)"
+        details: "For the most promising items from Step 3, consider using ConPort's `get_linked_items` operation to fetch directly related items (1-hop). This can provide crucial context or disambiguation. Use judiciously."
+      - step: 5
+        action: "Synthesize and Filter Retrieved Information"
+        details: |
+          Review the information retrieved from ConPort (initial set + expanded context).
+          - **Filter:** Discard irrelevant items or parts of items.
+          - **Synthesize/Summarize:** If multiple relevant pieces of information are found, synthesize them into a concise summary that directly addresses the query/task. Extract only the most pertinent sentences or facts.
+          - **Integrate Native Tool Findings:** If native tools like `View File` were used on a path found via ConPort, integrate relevant snippets from that file content here.
+      - step: 6
+        action: "Formulate Response Using Assembled Context"
+        details: |
+          Use the filtered and synthesized information to formulate your response to the USER.
+          - **Attribution (Conceptual):** While you don't tell the USER "From Decision D-42", your internal reasoning should be based on such specific sources. Your explanation of *why* you're doing something (as per `interaction_protocol`) can hint at the type of source (e.g., "Based on our project's logged decisions...").
+          - **Brevity:** Strive for relevance and conciseness in the information used to generate the response.
+    general_principles:
+      - "Prefer targeted retrieval from ConPort over broad context dumps."
+      - "Iterate if initial retrieval is insufficient: try different keywords or ConPort operations."
+      - "Balance context richness with response clarity and token limits."
+
+  proactive_knowledge_graph_linking:
+    title: "Proactive Knowledge Graph Linking"
+    description: |
+      This strategy guides Windsurf Cascade to proactively identify and suggest the creation of links
+      between ConPort items, enriching the project's knowledge graph based on conversational context.
+    trigger: "During ongoing conversation, when you observe potential relationships (e.g., causal, implementational, clarifying) between two or more discussed ConPort items or concepts that are likely represented as ConPort items."
+    goal: "To actively build and maintain a rich, interconnected knowledge graph within ConPort by capturing relationships that might otherwise be missed."
+    adherence_note: "Remember to follow all rules in `interaction_protocol` (explain intent to USER, no operation names to USER, tool call at end) when performing these steps."
+    steps:
+      - step: 1
+        action: "Monitor Conversational Context"
+        details: "Continuously analyze the user's statements and the flow of discussion for mentions of ConPort items (explicitly by ID, or implicitly by well-known names/summaries) and the relationships being described or implied between them."
+      - step: 2
+        action: "Identify Potential Links"
+        details: |
+          Look for patterns such as:
+          - User states "Decision X led to us doing Y (which is Progress item P-3)."
+          - User discusses how System Pattern SP-2 helps address a concern noted in Decision D-5.
+      - step: 3
+        action: "Formulate and Propose Link Suggestion"
+        details: |
+          If a potential link is identified:
+          - Clearly state the items involved (e.g., "Decision D-5", "System Pattern SP-2").
+          - Describe the perceived relationship (e.g., "It seems SP-2 addresses a concern in D-5.").
+          - Propose creating a link using your platform's question-asking mechanism (e.g., `ask_followup_question` placeholder).
+          - Example Question: "I noticed we're discussing Decision D-5 and System Pattern SP-2. It sounds like SP-2 might 'address_concern_in' D-5. Would you like me to create this link in ConPort? You can also suggest a different relationship type."
+          - Suggested Answers (adapt to your platform's capabilities):
+            - "Yes, link them with 'addresses_concern_in'."
+            - "Yes, but use relationship type: [user types here]."
+            - "No, don't link them now."
+          - Offer common relationship types as examples if needed: 'implements', 'clarifies', 'related_to', 'depends_on', 'blocks', 'resolves', 'derived_from'.
+      - step: 4
+        action: "Gather Details and Execute Linking via ConPort"
+        details: |
+          If the user confirms:
+          - Ensure you have the correct source item type, source item ID, target item type, target item ID, and the agreed-upon relationship type.
+          - Ask for an optional brief description for the link if the relationship isn't obvious.
+          - Invoke the ConPort `link_conport_items` operation (refer to `conport_operations_reference` for call structure).
+      - step: 5
+        action: "Confirm Outcome"
+        details: "Inform the USER of the success or failure of the ConPort `link_conport_items` operation call."
+    general_principles:
+      - "Be helpful, not intrusive. If the user declines a suggestion, accept and move on."
+      - "Prioritize clear, strong relationships over tenuous ones."
+      - "This strategy complements the general `proactive_memory_management` -> `logging_guideline` by providing specific guidance for link creation."
+
 # --- Prompt Caching Strategies by Provider ---
 prompt_caching_strategies:
   enabled: true
