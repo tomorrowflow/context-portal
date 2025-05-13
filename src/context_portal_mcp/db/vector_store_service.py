@@ -49,10 +49,19 @@ def _get_vector_store_path(workspace_id: str) -> str:
     # OR if workspace_id is the full project path:
     # "/abs/path/to/project/.conport_data/vector_store" (more typical)
 
-    # For now, using a path relative to the workspace_id itself, in a hidden folder.
-    # This assumes workspace_id is the root path of the user's project.
-    vector_db_path = os.path.join(workspace_id, ".conport_vector_data")
+    # Path for ChromaDB persistence.
+    # It will be located at: [workspace_id]/context_portal/conport_vector_data/
+    # This aligns with the SQLite DB being in [workspace_id]/context_portal/context.db
+    # workspace_id is assumed to be the root path of the user's project.
+    
+    # Ensure the 'context_portal' directory exists at the workspace root first.
+    # The SQLite setup in config.py also creates this, but good to be robust.
+    context_portal_base_dir = os.path.join(workspace_id, "context_portal")
+    os.makedirs(context_portal_base_dir, exist_ok=True)
+
+    vector_db_path = os.path.join(context_portal_base_dir, "conport_vector_data") # No leading dot, and inside context_portal
     os.makedirs(vector_db_path, exist_ok=True)
+    log.info(f"Vector store path set to: {vector_db_path}")
     return vector_db_path
 
 
