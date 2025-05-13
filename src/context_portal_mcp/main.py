@@ -254,6 +254,48 @@ async def tool_get_progress(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPConte
         log.error(f"Error processing args for get_progress: {e}. Received raw: {raw_args_from_fastmcp}")
         raise exceptions.ContextPortalError(f"Server error processing get_progress: {type(e).__name__}")
 
+@conport_mcp.tool(name="update_progress")
+async def tool_update_progress(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    """
+    MCP tool wrapper for update_progress.
+    Validates arguments and calls the handler.
+    """
+    try:
+        # Pydantic model will parse and validate the raw dictionary.
+        log.debug(f"update_progress raw_args: {raw_args_from_fastmcp}")
+        pydantic_args = models.UpdateProgressArgs(**raw_args_from_fastmcp)
+        return mcp_handlers.handle_update_progress(pydantic_args)
+    except exceptions.ToolArgumentError as e:
+        log.error(f"Argument validation error for update_progress: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Invalid arguments for update_progress: {e}")
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in update_progress handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Unexpected error processing args for update_progress: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing update_progress: {type(e).__name__} - {e}")
+
+@conport_mcp.tool(name="delete_progress_by_id")
+async def tool_delete_progress_by_id(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
+    """
+    MCP tool wrapper for delete_progress_by_id.
+    Validates arguments and calls the handler.
+    """
+    try:
+        # Pydantic model will parse and validate the raw dictionary.
+        log.debug(f"delete_progress_by_id raw_args: {raw_args_from_fastmcp}")
+        pydantic_args = models.DeleteProgressByIdArgs(**raw_args_from_fastmcp)
+        return mcp_handlers.handle_delete_progress_by_id(pydantic_args)
+    except exceptions.ToolArgumentError as e:
+        log.error(f"Argument validation error for delete_progress_by_id: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Invalid arguments for delete_progress_by_id: {e}")
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in delete_progress_by_id handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Unexpected error processing args for delete_progress_by_id: {e}. Received raw: {raw_args_from_fastmcp}")
+        raise exceptions.ContextPortalError(f"Server error processing delete_progress_by_id: {type(e).__name__} - {e}")
+
 @conport_mcp.tool(name="log_system_pattern")
 async def tool_log_system_pattern(raw_args_from_fastmcp: Dict[str, Any], ctx: MCPContext) -> Dict[str, Any]:
     try:

@@ -672,6 +672,71 @@ def get_progress(
         raise DatabaseError(f"Failed to retrieve progress entries: {e}")
     finally:
         cursor.close()
+
+def update_progress_entry(workspace_id: str, update_args: models.UpdateProgressArgs) -> bool:
+    """
+    Updates an existing progress entry by its ID.
+    Returns True if the entry was found and updated, False otherwise.
+    """
+    conn = get_db_connection(workspace_id)
+    cursor = conn.cursor()
+    
+    sql = "UPDATE progress_entries SET"
+    updates = []
+    params_list: List[Any] = []
+
+    if update_args.status is not None:
+        updates.append("status = ?")
+        params_list.append(update_args.status)
+    if update_args.description is not None:
+        updates.append("description = ?")
+        params_list.append(update_args.description)
+    # Handle parent_id update, including setting to NULL if explicitly None is intended (though Pydantic allows Optional[int])
+    # If parent_id is provided as 0 or a positive int, update it.
+    # If parent_id is provided as None, set the DB column to NULL.
+    # If parent_id is NOT provided in args (remains default None), do not include in update.
+    # The Pydantic model check_at_least_one_field ensures at least one field is provided,
+    # so we don't need to worry about an empty updates list here.
+    if 'parent_id' in update_args.model_fields_set: # Check if parent_id was explicitly set in the input args
+         updates.append("parent_id = ?")
+         params_list.append(update_args.parent_id) # SQLite handles Python None as NULL
+
+    if not updates:
+         # This case should be prevented by Pydantic model validation, but as a safeguard
+         raise ValueError("No fields provided for update.")
+
+    sql += " " + ", ".join(updates) + " WHERE id = ?"
+    params_list.append(update_args.progress_id)
+    params = tuple(params_list)
+
+    try:
+        cursor.execute(sql, params)
+        conn.commit()
+        return cursor.rowcount > 0 # Return True if one row was updated
+    except sqlite3.Error as e:
+        conn.rollback()
+        raise DatabaseError(f"Failed to update progress entry with ID {update_args.progress_id}: {e}")
+    finally:
+        cursor.close()
+
+def delete_progress_entry_by_id(workspace_id: str, progress_id: int) -> bool:
+    """
+    Deletes a progress entry by its ID.
+    Note: This will also set the parent_id of any child tasks to NULL due to FOREIGN KEY ON DELETE SET NULL.
+    Returns True if deleted, False otherwise.
+    """
+    conn = get_db_connection(workspace_id)
+    cursor = conn.cursor()
+    sql = "DELETE FROM progress_entries WHERE id = ?"
+    try:
+        cursor.execute(sql, (progress_id,))
+        conn.commit()
+        return cursor.rowcount > 0 # Return True if one row was deleted
+    except sqlite3.Error as e:
+        conn.rollback()
+        raise DatabaseError(f"Failed to delete progress entry with ID {progress_id}: {e}")
+    finally:
+        cursor.close()
 def log_system_pattern(workspace_id: str, pattern_data: models.SystemPattern) -> models.SystemPattern:
     """Logs or updates a system pattern. Uses INSERT OR REPLACE based on unique name."""
     conn = get_db_connection(workspace_id)

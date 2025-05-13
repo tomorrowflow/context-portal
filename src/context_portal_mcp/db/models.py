@@ -158,6 +158,27 @@ class GetProgressArgs(BaseArgs):
     parent_id_filter: Optional[int] = Field(None, description="Filter entries by parent task ID")
     limit: Optional[int] = Field(None, gt=0, description="Maximum number of entries to return (most recent first)")
 
+# New model for updating a progress entry
+class UpdateProgressArgs(BaseArgs):
+    """Arguments for updating an existing progress entry."""
+    progress_id: int = Field(..., gt=0, description="The ID of the progress entry to update.")
+    status: Optional[str] = Field(None, description="New status (e.g., 'TODO', 'IN_PROGRESS', 'DONE')")
+    description: Optional[str] = Field(None, min_length=1, description="New description of the progress or task")
+    parent_id: Optional[int] = Field(None, description="New ID of the parent task, if changing") # Note: Setting to None might mean clearing parent
+
+    @model_validator(mode='before')
+    @classmethod
+    def check_at_least_one_field(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        status, description, parent_id = values.get('status'), values.get('description'), values.get('parent_id')
+        if status is None and description is None and parent_id is None:
+            raise ValueError("At least one field ('status', 'description', or 'parent_id') must be provided for update.")
+        return values
+
+# New model for deleting a progress entry by ID
+class DeleteProgressByIdArgs(BaseArgs):
+    """Arguments for deleting a progress entry by its ID."""
+    progress_id: int = Field(..., gt=0, description="The ID of the progress entry to delete.")
+
 # --- System Pattern Tools ---
 
 class LogSystemPatternArgs(BaseArgs):
@@ -363,4 +384,6 @@ TOOL_ARG_MODELS = {
     "get_conport_schema": GetConportSchemaArgs,
     "get_recent_activity_summary": GetRecentActivitySummaryArgs,
     "semantic_search_conport": SemanticSearchConportArgs, # New tool
+    "update_progress": UpdateProgressArgs, # New tool
+    "delete_progress_by_id": DeleteProgressByIdArgs, # New tool
 }

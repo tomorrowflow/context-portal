@@ -271,6 +271,73 @@ def handle_get_progress(args: models.GetProgressArgs) -> List[Dict[str, Any]]:
         log.exception(f"Unexpected error in get_progress for workspace {args.workspace_id}")
         raise ContextPortalError(f"Unexpected error in get_progress: {e}")
 
+def handle_update_progress(args: models.UpdateProgressArgs) -> Dict[str, Any]:
+    """
+    Handles the 'update_progress' MCP tool.
+    Assumes 'args' is an already validated Pydantic model instance.
+    Returns a status message dictionary.
+    """
+    try:
+        updated = db.update_progress_entry(args.workspace_id, args)
+
+        if updated:
+            # --- Update Vector Store ---
+            # Re-embedding on update requires fetching the full, updated entry from the DB
+            # to get the complete description and status for the vector.
+            # This requires a db.get_progress_entry_by_id function, which is not yet implemented.
+            # For now, we will skip re-embedding on update and log a warning.
+            # A future enhancement would be to implement db.get_progress_entry_by_id
+            # and then call vector_store_service.upsert_item_embedding here.
+            log.warning(f"Vector store update skipped for progress entry ID {args.progress_id} on update. Requires db.get_progress_entry_by_id for accurate re-embedding.")
+            # --- End Update Vector Store ---
+
+            return {"status": "success", "message": f"Progress entry ID {args.progress_id} updated successfully."}
+        else:
+            return {"status": "success", "message": f"Progress entry ID {args.progress_id} not found for update."}
+    except ValueError as e: # Catch validation errors from the handler/db call
+         raise ToolArgumentError(str(e))
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error updating progress entry ID {args.progress_id}: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in handle_update_progress for workspace {args.workspace_id}, ID {args.progress_id}")
+        raise ContextPortalError(f"Unexpected error updating progress entry: {e}")
+
+def handle_delete_progress_by_id(args: models.DeleteProgressByIdArgs) -> Dict[str, Any]:
+    """
+    Handles the 'delete_progress_by_id' MCP tool.
+    Deletes a progress entry by its ID.
+    """
+    try:
+        deleted_from_db = db.delete_progress_entry_by_id(args.workspace_id, args.progress_id)
+
+        if deleted_from_db:
+            try:
+                # --- Delete from Vector Store ---
+                vector_store_service.delete_item_embedding(
+                    workspace_id=args.workspace_id,
+                    item_type="progress_entry",
+                    item_id=str(args.progress_id)
+                )
+                log.info(f"Successfully deleted embedding for progress entry ID {args.progress_id}")
+                # --- End Delete from Vector Store ---
+                return {"status": "success", "message": f"Progress entry ID {args.progress_id} and its embedding deleted successfully."}
+            except Exception as e_vec_del:
+                log.error(f"Failed to delete embedding for progress entry ID {args.progress_id} (DB record was deleted): {e_vec_del}", exc_info=True)
+                # Return success for DB deletion but acknowledge embedding deletion failure.
+                return {
+                    "status": "partial_success",
+                    "message": f"Progress entry ID {args.progress_id} deleted from database, but failed to delete its embedding: {e_vec_del}"
+                }
+        else:
+            # This case means the ID was valid (e.g. integer) but not found in DB.
+            # No need to attempt vector deletion if not found in DB.
+            return {"status": "success", "message": f"Progress entry ID {args.progress_id} not found in database."}
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error deleting progress entry ID {args.progress_id}: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in handle_delete_progress_by_id for workspace {args.workspace_id}, ID {args.progress_id}")
+        raise ContextPortalError(f"Unexpected error deleting progress entry: {e}")
+
 def handle_log_system_pattern(args: models.LogSystemPatternArgs) -> Dict[str, Any]:
     """
     Handles the 'log_system_pattern' MCP tool.
