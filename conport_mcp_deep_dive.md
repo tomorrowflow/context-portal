@@ -20,7 +20,8 @@ The Context Portal (ConPort) MCP server is designed to manage and provide struct
 *   **Structured Data Management:** ConPort defines several core data entities (see Section 2) to structure project knowledge, such as decisions, progress, system patterns, and custom data.
 *   **Tool-Based Interaction:** AI assistants interact with ConPort by calling its defined MCP tools, each designed for a specific operation (e.g., logging a decision, retrieving active context).
 *   **Knowledge Graph Construction:** ConPort facilitates the creation of a project-specific knowledge graph by storing structured entities (decisions, code patterns, glossary terms) and allowing explicit, queryable relationships to be defined between them using tools like `link_conport_items`.
-*   **RAG Enablement:** The system is designed to be a core component for Retrieval Augmented Generation (RAG) workflows. Its rich querying capabilities (FTS, direct retrieval, graph traversal) allow AI agents to fetch relevant context to augment their generative tasks, leading to more accurate and grounded outputs.
+*   **Vector Embeddings & Semantic Search:** ConPort generates and stores vector embeddings for key text content within various entities, enabling semantic similarity search.
+*   **RAG Enablement:** The system is designed to be a core component for Retrieval Augmented Generation (RAG) workflows. Its rich querying capabilities (FTS, semantic search, direct retrieval, graph traversal) allow AI agents to fetch relevant context to augment their generative tasks, leading to more accurate and grounded outputs.
 ## 2. Core Data Entities & Database Schema
 
 ConPort utilizes an SQLite database, specific to each workspace, to store its structured context. The key data entities and their corresponding database tables are:
@@ -97,6 +98,21 @@ ConPort utilizes an SQLite database, specific to each workspace, to store its st
         *   `version` (INTEGER, NOT NULL): Version number for the context.
         *   `content` (TEXT, NOT NULL): The JSON string content of the context at this version.
         *   `change_source` (TEXT): Brief description of what triggered the change (e.g., tool name).
+
+9. **Vector Store (ChromaDB)**
+    *   **Purpose:** Stores vector embeddings generated from text content of various ConPort entities (Decisions, Progress, Custom Data, etc.) to enable semantic similarity search.
+    *   **Location:** Stored on disk within the workspace's ConPort data directory, separate from the SQLite file but managed alongside it.
+    *   **Integration:** Linked to SQLite data via item type and ID metadata stored alongside the vectors.
+
+9. **Vector Store (ChromaDB)**
+    *   **Purpose:** Stores vector embeddings generated from text content of various ConPort entities (Decisions, Progress, Custom Data, etc.) to enable semantic similarity search.
+    *   **Location:** Stored on disk within the workspace's ConPort data directory, separate from the SQLite file but managed alongside it.
+    *   **Integration:** Linked to SQLite data via item type and ID metadata stored alongside the vectors.
+
+9. **Vector Store (ChromaDB)**
+    *   **Purpose:** Stores vector embeddings generated from text content of various ConPort entities (Decisions, Progress, Custom Data, etc.) to enable semantic similarity search.
+    *   **Location:** Stored on disk within the workspace's ConPort data directory, separate from the SQLite file but managed alongside it.
+    *   **Integration:** Linked to SQLite data via item type and ID metadata stored alongside the vectors.
 
 Pydantic models defined in `src/context_portal_mcp/db/models.py` mirror these table structures and are used for data validation and serialization/deserialization within the server.
 ## 3. MCP Tool Reference
@@ -193,6 +209,23 @@ The ConPort server exposes the following MCP tools. These tools allow AI agents 
     *   `parent_id_filter` (integer, optional): Filter entries by parent task ID (Default: null)
     *   `limit` (integer, optional): Maximum number of entries to return (most recent first) (Default: null)
 *   **Pydantic Model:** `GetProgressArgs`
+
+#### 3.4.3 `update_progress`
+*   **Description:** Arguments for updating an existing progress entry.
+*   **Arguments:**
+    *   `workspace_id` (string): Identifier for the workspace (e.g., absolute path) (Required: Yes)
+    *   `progress_id` (integer): The ID of the progress entry to update. (Required: Yes)
+    *   `status` (string, optional): New status (e.g., 'TODO', 'IN_PROGRESS', 'DONE') (Default: null)
+    *   `description` (string, optional): New description of the progress or task (Default: null)
+    *   `parent_id` (integer, optional): New ID of the parent task, if changing (Default: null)
+*   **Pydantic Model:** `UpdateProgressArgs`
+
+#### 3.4.4 `delete_progress_by_id`
+*   **Description:** Arguments for deleting a progress entry by its ID.
+*   **Arguments:**
+    *   `workspace_id` (string): Identifier for the workspace (e.g., absolute path) (Required: Yes)
+    *   `progress_id` (integer): The ID of the progress entry to delete. (Required: Yes)
+*   **Pydantic Model:** `DeleteProgressByIdArgs`
 
 ### 3.5 System Pattern Tools
 
@@ -417,7 +450,13 @@ To add a new MCP tool:
 *   Full-text search capabilities for System Patterns.
 *   More advanced querying for `context_links` (e.g., graph traversal queries, finding items with no links).
 
-### 5.2 Collaboration Features (if shifting to a multi-user model)
+### 5.2 Enhanced Progress Management
+*   Added tools for updating (`update_progress`) and deleting (`delete_progress_by_id`) individual progress entries by their ID, providing more granular control over progress tracking data.
+
+### 5.2 Enhanced Progress Management
+*   Added tools for updating (`update_progress`) and deleting (`delete_progress_by_id`) individual progress entries by their ID, providing more granular control over progress tracking data.
+
+### 5.3 Collaboration Features (if shifting to a multi-user model)
 *   User identification for logged items.
 *   Permissions and access control if data is shared.
 *   Real-time updates/notifications if a multi-user model were adopted for the same ConPort instance.
@@ -426,14 +465,13 @@ To add a new MCP tool:
 *   While `value` in `custom_data` is `Any` (JSON serializable), providing explicit support or validation for common structured types (e.g., lists of specific objects, typed dictionaries) could be beneficial.
 
 ### 5.4 Enhanced Retrieval for RAG (Retrieval-Augmented Generation)
-ConPort already functions as a key component in a RAG system by enabling the construction and querying of a **project-specific knowledge graph**. Its FTS capabilities (for decisions, custom data) and direct data retrieval tools (get_product_context, get_decisions, etc.) serve as the "Retrieval" mechanism. To further enhance this:
-*   **Advanced Semantic Search:** Integrate vector embeddings for text-heavy fields (e.g., decision rationale, system pattern descriptions, custom data values). This would allow for finding conceptually similar items beyond keyword matches, significantly improving the quality of retrieved context for LLM augmentation. This could involve:
-    *   A new ConPort tool to generate and store embeddings for specified data items.
-    *   A new ConPort tool to perform semantic similarity searches using query embeddings.
-    *   Potentially integrating a vector database or extending SQLite with vector search capabilities (e.g., via extensions like `sqlite-vss`).
-*   **Context Chunking for LLMs:** Introduce a tool or mechanism to retrieve specific ConPort data items (or parts of them, like a long decision rationale) in "chunks" optimized for LLM context windows. This would help in feeding manageable pieces of relevant information to the LLM.
-*   **Automated Context Suggestion:** Develop tools within ConPort that, based on a query or a summary of the current task (perhaps provided by the LLM), could proactively suggest relevant ConPort items (decisions, patterns, glossary terms) that the LLM might want to retrieve to augment its generation. This could use a combination of FTS, semantic search, and knowledge graph traversal (`get_linked_items`).
-*   **Hybrid Search:** Combine keyword-based FTS with semantic search to leverage the strengths of both approaches for more robust and relevant retrieval.
+### 5.4 Enhanced Retrieval for RAG (Retrieval-Augmented Generation)
+ConPort functions as a key component in a RAG system by enabling the construction and querying of a **project-specific knowledge graph**. Its capabilities, now including **vector embeddings** and **semantic search**, serve as the "Retrieval" mechanism.
+
+*   **Vector Embeddings & Semantic Search:** ConPort integrates vector embeddings for text content within various entities (Decisions, Progress, Custom Data, System Patterns). This allows for finding conceptually similar items beyond keyword matches using the `semantic_search_conport` tool, significantly improving the quality of retrieved context for LLM augmentation. This is powered by a dedicated vector store (ChromaDB) managed alongside the SQLite database.
+*   **Hybrid Search:** The system supports combining keyword-based FTS with semantic search to leverage the strengths of both approaches for more robust and relevant retrieval.
+*   **Context Chunking for LLMs:** (Future Consideration) Introduce a tool or mechanism to retrieve specific ConPort data items (or parts of them, like a long decision rationale) in "chunks" optimized for LLM context windows. This would help in feeding manageable pieces of relevant information to the LLM.
+*   **Automated Context Suggestion:** (Future Consideration) Develop tools within ConPort that, based on a query or a summary of the current task (perhaps provided by the LLM), could proactively suggest relevant ConPort items (decisions, patterns, glossary terms) that the LLM might want to retrieve to augment its generation. This could use a combination of FTS, semantic search, and knowledge graph traversal (`get_linked_items`).
 
 ### 5.5 More Granular History
 *   Currently, only Product and Active Context have explicit history tables. Consider if versioning/history for other entities like Decisions or System Patterns would be valuable.
