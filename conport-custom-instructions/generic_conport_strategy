@@ -1,258 +1,501 @@
+# Custom Instructions for AI Model (Generic ConPort Integration)
+
 # --- External Strategy References ---
-# This section lists external files containing specific strategies or instructions.
-# The LLM assistant should read and incorporate these strategies as needed.
 external_strategies:
   prompt_caching:
-    file_path: "context_portal/prompt_caching_strategy.yml"
+    file_path: "context_portal/prompt_caching_strategy.yml" # Assumed to be accessible by the agent
     description: "Defines strategies for leveraging prompt caching with different LLM providers."
 
+# --- ConPort Memory Strategy (Generic AI Agent) ---
 conport_memory_strategy:
-  workspace_id_source: "The AI agent must obtain the absolute path to the current project workspace. This identifier (referred to as `ACTUAL_WORKSPACE_ID`) is critical for all interactions with the ConPort system, as ConPort manages context on a per-workspace basis. The method for obtaining this (e.g., from an environment variable like `${workspaceFolder}`, a direct API from the host IDE, or by asking the user) will depend on the agent's capabilities."
+  workspace_id_source: "The AI agent must obtain the absolute path to the current project workspace. This identifier (referred to as `ACTUAL_WORKSPACE_ID`) is critical for all interactions with the ConPort system, as ConPort manages context on a per-workspace basis. The method for obtaining this (e.g., from an environment variable, a direct API from the host IDE, or by asking the user) will depend on the agent's capabilities."
 
-  initialization: |
-    # Agent High-Level Plan for Initialization:
-    # 1. Determine `ACTUAL_WORKSPACE_ID` as per `workspace_id_source`. This is a prerequisite.
-    # 2. Check if a ConPort data store (e.g., a database file like 'context_portal/context.db') exists for this `ACTUAL_WORKSPACE_ID`.
-    #    ACTION: Use available file system capabilities to check for `ACTUAL_WORKSPACE_ID + "/context_portal/context.db"`.
-    # 3. Based on the check:
-    #    IF ConPort data store exists:
-    #        Proceed to 'load_existing_conport_context' sequence.
-    #    ELSE (ConPort data store NOT found):
-    #        Proceed to 'handle_new_conport_setup' sequence.
+  initialization:
+    description: "Agent High-Level Plan for ConPort Initialization"
+    steps:
+      - step: 1
+        action: "Determine `ACTUAL_WORKSPACE_ID` as per `workspace_id_source`. This is a prerequisite."
+      - step: 2
+        action: "Check if a ConPort data store (e.g., a database file like 'context_portal/context.db') exists for this `ACTUAL_WORKSPACE_ID`."
+        details: "AGENT_ACTION: Use available file system capabilities to check for `ACTUAL_WORKSPACE_ID + \"/context_portal/context.db\"`."
+      - step: 3
+        action: "Based on the check:"
+        conditions:
+          - if: "ConPort data store exists"
+            then_sequence: "load_existing_conport_context"
+          - else: "ConPort data store NOT found"
+            then_sequence: "handle_new_conport_setup"
 
-  load_existing_conport_context: |
-    # Agent High-Level Plan for Loading Existing Context:
-    # 1. Discover ConPort Capabilities:
-    #    ACTION: Interact with the ConPort system to perform a "get_conport_schema" operation. (Params: `workspace_id`). Store the returned schema detailing available ConPort operations and their parameters. This schema is the authoritative source for how to interact with ConPort.
+  load_existing_conport_context:
+    description: "Agent High-Level Plan for Loading Existing ConPort Context"
+    steps:
+      - step: 1
+        action: "Discover ConPort Capabilities by performing a 'Get ConPort Schema' operation."
+        details: "AGENT_ACTION: Interact with the ConPort system to perform a 'Get ConPort Schema' operation. Key Parameter: `workspace_id`. Store the returned schema. This schema is the authoritative source for all subsequent ConPort operations."
+      - step: 2
+        action: "Attempt to load initial contexts from the ConPort system for the `ACTUAL_WORKSPACE_ID`, using the discovered schema. This involves sequentially requesting different types of stored context."
+        sub_actions_conceptual: # These are conceptual operations; use the schema for actual tool names and params.
+          - "Perform 'Get Product Context' operation. Key Parameter: `workspace_id`. Store result."
+          - "Perform 'Get Active Context' operation. Key Parameter: `workspace_id`. Store result."
+          - "Perform 'Get Decisions' operation. Key Parameters: `workspace_id`, (optional) `limit`. Store result."
+          - "Perform 'Get Progress Entries' operation. Key Parameters: `workspace_id`, (optional) `limit`. Store result."
+          - "Perform 'Get System Patterns' operation. Key Parameters: `workspace_id`, (optional) `limit`. Store result."
+          - "Perform 'Get Custom Data' operation for category 'critical_settings'. Key Parameters: `workspace_id`, `category`. Store result."
+          - "Perform 'Get Custom Data' operation for category 'ProjectGlossary'. Key Parameters: `workspace_id`, `category`. Store result."
+          - "Perform 'Get Recent Activity Summary' operation. Key Parameters: `workspace_id`, (optional) `hours_ago`, `limit_per_type`. Store result."
+      - step: 3
+        action: "Analyze all loaded/imported context."
+        conditions:
+          - if: "the retrieved context from step 2 is substantial"
+            actions:
+              - "Set internal status: [CONPORT_ACTIVE]."
+              - "Inform user: \"ConPort memory initialized. Existing contexts and recent activity loaded.\""
+              - "AGENT_ACTION: Ask the user for next steps (e.g., \"Review recent activity?\", \"Continue previous task?\", \"What would you like to work on?\"). Use your platform's mechanism for asking questions."
+          - else: "context remains empty/minimal" # DB file existed but context is empty
+            actions:
+              - "Set internal status: [CONPORT_ACTIVE]."
+              - "Inform user: \"ConPort data store found/initialized, but it appears to be empty or minimally populated. You can start by defining Product/Active Context or logging project information.\""
+              - "AGENT_ACTION: Ask the user for next steps (e.g., \"Define Product Context?\", \"Log a new decision?\")."
+      - step: 4
+        action: "Handle Load Failure."
+        conditions:
+          - if: "any attempts to request data from ConPort in step 2 failed unexpectedly (e.g., communication errors after schema retrieval)"
+            action: "Proceed to `if_conport_unavailable_or_init_failed`."
+          - if: "'Get ConPort Schema' operation itself failed in step 1"
+            action: "ConPort is likely unavailable. Proceed to `if_conport_unavailable_or_init_failed`."
 
-    # 2. Attempt to load initial contexts from the ConPort system for the `ACTUAL_WORKSPACE_ID`, using the discovered schema.
-    #    This involves sequentially requesting different types of stored context.
-    #    ACTION: Request 'Product Context' from ConPort. (Consult schema for exact parameters, typically `workspace_id`). Store result.
-    #    ACTION: Request 'Active Context' from ConPort. (Consult schema, typically `workspace_id`). Store result.
-    #    ACTION: Request a list of recent 'Decisions' (e.g., last 5). (Consult schema, typically `workspace_id`, `limit`). Store result.
-    #    ACTION: Request a list of recent 'Progress Entries' (e.g., last 5). (Consult schema, typically `workspace_id`, `limit`). Store result.
-    #    ACTION: Request a list of recent 'System Patterns' (e.g., last 5). (Consult schema, typically `workspace_id`, `limit`). Store result.
-    #    ACTION: Request 'Custom Data' for category "critical_settings". (Consult schema, typically `workspace_id`, `category`). Store result.
-    #    ACTION: Request 'Custom Data' for category "ProjectGlossary". (Consult schema, typically `workspace_id`, `category`). Store result.
-    #    ACTION: Request a 'Recent Activity Summary' (e.g., last 24h, limit 3 per type). (Consult schema, typically `workspace_id`, `hours_ago`, `limit_per_type`). Store result.
+  handle_new_conport_setup:
+    description: "Agent High-Level Plan for New ConPort Setup"
+    steps:
+      - step: 1
+        action: "Inform user: \"No existing ConPort data store found for this workspace (`ACTUAL_WORKSPACE_ID + \"/context_portal/context.db\"`).\""
+      - step: 2
+        action: "AGENT_ACTION: Ask the user: \"Would you like to initialize a new ConPort data store for this workspace? It will be created automatically when project information is first saved via ConPort.\" Provide clear \"Yes\" / \"No\" options using your platform's question-asking mechanism."
+      - step: 3
+        action: "Based on user response:"
+        conditions:
+          - if_user_response_is: "Yes" # Adapt to how your platform receives user choices
+            actions:
+              - "Inform user: \"Okay, a new ConPort data store will be created when needed.\""
+              - description: "Attempt to bootstrap Product Context from projectBrief.md (this happens only on new setup)."
+                sub_steps:
+                  - "AGENT_ACTION: Use file system capabilities to check for `ACTUAL_WORKSPACE_ID + \"/projectBrief.md\"`."
+                  - description: "Analyze result for 'projectBrief.md'."
+                    conditions:
+                      - if: "`projectBrief.md` is found"
+                        actions:
+                          - "AGENT_ACTION: Read the content of `projectBrief.md` using file system capabilities."
+                          - "AGENT_ACTION: Ask the user: \"Found projectBrief.md in your workspace. As we're setting up ConPort for the first time, would you like to import its content into the Product Context?\" Provide clear \"Yes\" / \"No\" options."
+                          - description: "Process user response to import projectBrief.md."
+                            conditions:
+                              - if_user_response_is: "Yes"
+                                actions:
+                                  - "AGENT_ACTION: Prepare the content from `projectBrief.md` for updating the Product Context in ConPort. This might involve creating a JSON object like `{\"initial_product_brief\": \"[content from projectBrief.md]\"}`."
+                                  - "AGENT_ACTION: Perform an 'Update Product Context' operation with ConPort, providing the prepared content. (Crucial: First perform 'Get ConPort Schema' if not already done in this session to know how to call this operation)."
+                                  - "Inform user of the import result (success or failure)."
+                      - else: "`projectBrief.md` NOT found"
+                        actions:
+                          - "AGENT_ACTION: Ask the user: \"`projectBrief.md` was not found in the workspace root. Would you like to define the initial Product Context manually now?\" Provide clear options like \"Define Product Context manually.\", \"Skip for now.\""
+                          - "(If \"Define manually\", guide user through an 'Update Product Context' interaction with ConPort)."
+              - "Proceed to 'load_existing_conport_context' sequence (which will now perform schema discovery and load the potentially bootstrapped product context and other empty contexts)."
+          - if_user_response_is: "No"
+            action: "Proceed to `if_conport_unavailable_or_init_failed` (with a message indicating user chose not to initialize)."
 
+  if_conport_unavailable_or_init_failed:
+    description: "Agent High-Level Plan if ConPort is Unavailable or Initialization Fails/Declined"
+    action: |
+      Inform user: "ConPort memory system could not be initialized or was declined for this session. Context will not be persistently managed by ConPort. Status: [CONPORT_INACTIVE]."
+      Set internal status: [CONPORT_INACTIVE].
+      Proceed with the user's task using only information directly available or from other non-ConPort capabilities.
 
-    # 3. Analyze all loaded/imported context:
-    #    IF the retrieved context from step 2 is substantial:
-    #        Set internal status: [CONPORT_ACTIVE].
-    #        Inform user: "ConPort memory initialized. Existing contexts and recent activity loaded."
-    #        ACTION: Ask the user for next steps, e.g., "Review recent activity?", "Continue previous task?", "What would you like to work on?".
-    #    ELSE (context remains empty/minimal):
-    #        Set internal status: [CONPORT_ACTIVE].
-    #        Inform user: "ConPort data store found/initialized, but it appears to be empty or minimally populated. You can start by defining Product/Active Context or logging project information (or by creating a projectBrief.md for next time)."
-    #        ACTION: Ask the user for next steps, e.g., "Define Product Context?", "Log a new decision?".
-
-    # 4. Handle Load Failure:
-    #    If any attempts to request data from ConPort in step 2 failed unexpectedly (e.g., communication errors after schema retrieval):
-    #        Proceed to `if_conport_unavailable_or_init_failed`.
-    #    If `get_conport_schema` itself failed in step 1, ConPort is likely unavailable. Proceed to `if_conport_unavailable_or_init_failed`.
-
-  handle_new_conport_setup: |
-    # Agent High-Level Plan for New ConPort Setup:
-    # 1. Inform user: "No existing ConPort data store found for this workspace (`ACTUAL_WORKSPACE_ID + "/context_portal/context.db"`)."
-    # 2. ACTION: Ask the user: "Would you like to initialize a new ConPort data store for this workspace? It will be created automatically when project information is first saved via ConPort." Provide clear "Yes" / "No" options.
-    # 3. Based on user response:
-    #    IF "Yes":
-    #        Inform user: "Okay, a new ConPort data store will be created when needed."
-    #        Attempt to bootstrap Product Context from projectBrief.md (this happens only on new setup):
-    #        ACTION: Use file system capabilities to check for `ACTUAL_WORKSPACE_ID + "/projectBrief.md"`.
-    #        IF `projectBrief.md` is found:
-    #            ACTION: Read the content of `projectBrief.md`.
-    #            ACTION: Ask the user: "Found projectBrief.md in your workspace. As we're setting up ConPort for the first time, would you like to import its content into the Product Context?" Provide clear "Yes" / "No" options.
-    #            IF user confirms "Yes":
-    #                (No need to get current Product Context as DB is new)
-    #                ACTION: Prepare the content from `projectBrief.md` for updating the Product Context in ConPort. This might involve creating a JSON object like `{"initial_product_brief": "[content from projectBrief.md]"}`.
-    #                ACTION: Send an 'Update Product Context' request to ConPort with the prepared content. (Consult schema for exact parameters, typically `workspace_id`, `content`).
-    #                Inform user of the import result (success or failure).
-    #        ELSE (`projectBrief.md` NOT found):
-    #            ACTION: Ask the user: "`projectBrief.md` was not found in the workspace root. Would you like to define the initial Product Context manually now?" Provide clear options like "Define Product Context manually.", "Skip for now."
-    #            (If "Define manually", guide user through an 'Update Product Context' interaction with ConPort).
-    #        Proceed to 'load_existing_conport_context' sequence (which will now load the potentially bootstrapped product context and other empty contexts, after schema discovery).
-    #    IF "No":
-    #        Proceed to `if_conport_unavailable_or_init_failed` (with a message indicating user chose not to initialize).
-
-  if_conport_unavailable_or_init_failed: |
-    # Agent High-Level Plan if ConPort is Unavailable or Initialization Fails/Declined:
-    # Inform user: "ConPort memory system could not be initialized or was declined for this session. Context will not be persistently managed by ConPort. Status: [CONPORT_INACTIVE]."
-    # Set internal status: [CONPORT_INACTIVE].
-    # Proceed with the user's task using only information directly available or from other non-ConPort capabilities.
-
-  general:
+  general_guidance:
     status_prefix: "Begin EVERY response with either '[CONPORT_ACTIVE]' or '[CONPORT_INACTIVE]' to indicate ConPort system status."
     proactive_logging_cue: "Throughout the conversation, identify opportunities to log or update project information in the ConPort system (e.g., if the user outlines a new plan, makes a decision, or defines a term). ALWAYS confirm with the user before logging new information or making updates to ConPort, explaining what you intend to save."
-    workspace_id_note: "All interactions with the ConPort system require the `ACTUAL_WORKSPACE_ID`. Note: When interacting with ConPort (which often uses the FastMCP library), tool-specific arguments like `ACTUAL_WORKSPACE_ID` are typically nested within a `raw_args_from_fastmcp` field in the actual request payload. The schema obtained from `get_conport_schema` should confirm this structure."
-    schema_discovery_note: "CRITICAL: The ConPort system provides a 'get_conport_schema' operation. Use this at the start of the session (after confirming ConPort availability) to discover all available ConPort operations, their exact names, and required/optional parameters. Subsequent interactions described below should use the information obtained from this schema."
+    workspace_id_note: "All interactions with the ConPort system require the `ACTUAL_WORKSPACE_ID`. Note: When interacting with ConPort (which often uses the FastMCP library), tool-specific arguments like `ACTUAL_WORKSPACE_ID` are typically nested within a `raw_args_from_fastmcp` field in the actual request payload. The schema obtained from the 'Get ConPort Schema' operation should confirm this structure."
+    schema_discovery_imperative: "CRITICAL: The ConPort system provides a 'Get ConPort Schema' operation. You MUST use this at the start of the session (after confirming ConPort availability, as per `load_existing_conport_context`) to discover all available ConPort operations, their exact names, and required/optional parameters. All subsequent interactions described below MUST use the information obtained from this live schema."
+    user_communication_protocol:
+      - "Explain Intent: Before performing any ConPort operation, briefly explain to the USER *why* you are accessing/modifying the project memory (e.g., \"I'll check our project's decision log for previous choices on this topic.\")."
+      - "No Operation Names to User: NEVER mention the specific ConPort operation/tool names (e.g., `get_decisions_tool_v1`) in your conversation with the USER. Refer to them conceptually (e.g., \"retrieve decisions\")."
+      - "Tool Call Placement (if applicable to platform): If your platform requires tool calls to be structured (e.g., at the end of a message), adhere to that. Otherwise, perform the interaction as per your platform's capabilities."
+      - "Wait for Results: If your next action depends on the output of a ConPort operation, ensure you have received and processed the result before proceeding."
 
-  conport_conceptual_interactions:
-    frequency: "Update ConPort throughout the session when significant project information changes, new insights are gained, or when explicitly requested by the user."
+  conport_operations_guidance:
+    description: |
+      This section details common conceptual operations available via the ConPort system.
+      AGENT_ACTION: To perform any of these, you MUST first consult the schema (obtained via 'Get ConPort Schema' operation) for the exact MCP tool name provided by ConPort for that conceptual operation, and its precise argument structure.
+    operations:
+      - conceptual_operation_name: "Get ConPort Schema"
+        purpose: "To discover all available ConPort operations (tools), their exact names, and their required/optional parameters. This is the foundational step for interacting with ConPort."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+            description: "The `ACTUAL_WORKSPACE_ID`."
+        agent_invocation_guidance: "Perform this operation first to understand how to call all other ConPort operations. The ConPort server will provide the schema for its MCP tools."
 
-    get_product_context:
-      intent: "To understand the overall project goals, features, or architecture."
-      guidance: "ACTION: Perform a 'get product context' operation with the ConPort system. Consult the retrieved ConPort schema for the exact operation name and all required/optional parameters."
-      expected_result_type: "A JSON object representing the project's product context."
+      - conceptual_operation_name: "Get Product Context"
+        purpose: "To understand the overall project goals, features, or architecture."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+        agent_invocation_guidance: "Consult schema for exact tool name and parameters."
 
-    update_product_context:
-      intent: "When the high-level project description, goals, features, or overall architecture changes significantly, as confirmed by the user."
-      guidance: |
-        # Agent Plan:
-        # 1. (Optional) ACTION: Perform a 'get product context' operation with ConPort.
-        # 2. Prepare the new data (full `content` object or partial `patch_content` object).
-        # 3. Confirm changes with the user.
-        # 4. ACTION: Perform an 'update product context' operation with ConPort, providing the prepared data. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "Confirmation of update."
+      - conceptual_operation_name: "Update Product Context"
+        purpose: "When the high-level project description, goals, features, or overall architecture changes significantly, as confirmed by the USER."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "content"
+            type: "object"
+            description: "For full overwrite of the context."
+          - name: "patch_content"
+            type: "object"
+            description: "For partial update. Schema may specify a sentinel like '__DELETE__' for key removal."
+        agent_invocation_guidance: "Consult schema. Confirm changes with user. Decide on full `content` or `patch_content`."
 
-    get_active_context:
-      intent: "To understand the current working focus, recent changes, open questions, or next steps."
-      guidance: "ACTION: Perform a 'get active context' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "A JSON object of active context."
+      - conceptual_operation_name: "Get Active Context"
+        purpose: "To understand the current task focus, immediate goals, or session-specific context."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+        agent_invocation_guidance: "Consult schema."
 
-    update_active_context:
-      intent: "When current working focus, recent changes, etc., are updated."
-      guidance: |
-        # (Similar to update_product_context: get current, prepare, confirm, perform 'update active context' operation with ConPort. Consult schema for exact operation name and all parameters.)
-      expected_result_type: "Confirmation of update."
+      - conceptual_operation_name: "Update Active Context"
+        purpose: "When the current focus of work changes, new questions arise, or session-specific context needs updating, as confirmed by the USER."
+        typical_parameters_to_expect_in_schema: # Similar to Update Product Context
+          - name: "workspace_id"
+            type: "string"
+          - name: "content"
+            type: "object"
+          - name: "patch_content"
+            type: "object"
+        agent_invocation_guidance: "Consult schema. Confirm changes. Decide on full or partial update."
 
-    log_decision:
-      intent: "When a significant decision is made and confirmed."
-      guidance: "ACTION: Perform a 'log decision' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "Confirmation, ideally with new decision's ID."
+      - conceptual_operation_name: "Log Decision"
+        purpose: "When a significant architectural or implementation decision is made and confirmed by the USER."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "summary"
+            type: "string"
+          - name: "rationale"
+            type: "string"
+            optional: true
+          - name: "implementation_details"
+            type: "string"
+            optional: true
+          - name: "tags"
+            type: "array of strings"
+            optional: true
+        agent_invocation_guidance: "Consult schema."
 
-    get_decisions:
-      intent: "To retrieve past decisions."
-      guidance: "ACTION: Perform a 'get decisions' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "List of decision objects."
+      - conceptual_operation_name: "Get Decisions"
+        purpose: "To retrieve a list of past decisions."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "limit"
+            type: "integer"
+            optional: true
+          - name: "tags_filter_include_all"
+            type: "array of strings"
+            optional: true
+          - name: "tags_filter_include_any"
+            type: "array of strings"
+            optional: true
+        agent_invocation_guidance: "Consult schema."
 
-    search_decisions:
-      intent: "To search decisions by keywords."
-      guidance: "ACTION: Perform a 'search decisions' operation (likely FTS-based) with ConPort. Consult schema for the exact operation name and all parameters. Note if a dedicated 'search project glossary' operation exists in schema for targeted glossary searches."
-      expected_result_type: "List of matching decision objects."
+      - conceptual_operation_name: "Search Decisions (FTS)"
+        purpose: "When searching for decisions by keywords in summary, rationale, details, or tags."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "query_term"
+            type: "string"
+          - name: "limit"
+            type: "integer"
+            optional: true
+        agent_invocation_guidance: "Consult schema for an FTS-enabled search operation for decisions."
 
-    delete_decision:
-      intent: "To delete a specific decision after user confirmation."
-      guidance: "ACTION: Perform a 'delete decision' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "Confirmation of deletion."
+      - conceptual_operation_name: "Delete Decision"
+        purpose: "To delete a specific decision after explicit user confirmation."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "decision_id" # Or similar identifier from the decision object
+            type: "string or integer"
+        agent_invocation_guidance: "Consult schema. CRITICAL: Confirm with user before deleting."
 
-    log_progress:
-      intent: "When a task's status changes or a new task is defined."
-      guidance: "ACTION: Perform a 'log progress' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "Confirmation, ideally with new progress entry's ID."
+      - conceptual_operation_name: "Log Progress Entry"
+        purpose: "When a task begins, its status changes, or it's completed. Also when a new sub-task is defined."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "summary"
+            type: "string"
+          - name: "status"
+            type: "string" # e.g., TODO, IN_PROGRESS, DONE
+          - name: "details"
+            type: "string"
+            optional: true
+          - name: "parent_id" # For sub-tasks
+            type: "string or integer"
+            optional: true
+          - name: "linked_item_type" # e.g., "decision"
+            type: "string"
+            optional: true
+          - name: "linked_item_id"
+            type: "string or integer"
+            optional: true
+        agent_invocation_guidance: "Consult schema."
 
-    get_progress:
-      intent: "To review task statuses or progress history."
-      guidance: "ACTION: Perform a 'get progress' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "List of progress entry objects."
+      - conceptual_operation_name: "Get Progress Entries"
+        purpose: "To review current task statuses, find pending tasks, or check history of progress."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "limit"
+            type: "integer"
+            optional: true
+          - name: "status_filter"
+            type: "string"
+            optional: true
+          - name: "parent_id_filter"
+            type: "string or integer"
+            optional: true
+        agent_invocation_guidance: "Consult schema."
 
-    log_system_pattern:
-      intent: "To document a recurring architectural or design pattern."
-      guidance: "ACTION: Perform a 'log system pattern' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "Confirmation, ideally with pattern's ID."
+      - conceptual_operation_name: "Log System Pattern"
+        purpose: "When new architectural patterns are introduced, or existing ones are modified, as confirmed by the USER."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "name"
+            type: "string"
+          - name: "description"
+            type: "string"
+          - name: "tags"
+            type: "array of strings"
+            optional: true
+        agent_invocation_guidance: "Consult schema."
 
-    get_system_patterns:
-      intent: "To retrieve documented system patterns."
-      guidance: "ACTION: Perform a 'get system patterns' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "List of system pattern objects."
+      - conceptual_operation_name: "Get System Patterns"
+        purpose: "To retrieve a list of defined system patterns."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "limit"
+            type: "integer"
+            optional: true
+          - name: "tags_filter_include_all"
+            type: "array of strings"
+            optional: true
+        agent_invocation_guidance: "Consult schema."
 
-    delete_system_pattern:
-      intent: "To delete a specific system pattern after user confirmation."
-      guidance: "ACTION: Perform a 'delete system pattern' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "Confirmation of deletion."
+      - conceptual_operation_name: "Delete System Pattern"
+        purpose: "To delete a specific system pattern after explicit user confirmation."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "pattern_id" # Or similar identifier
+            type: "string or integer"
+        agent_invocation_guidance: "Consult schema. CRITICAL: Confirm with user."
 
-    log_custom_data:
-      intent: "To store arbitrary categorized key-value data (e.g., glossary terms, config snippets)."
-      guidance: "ACTION: Perform a 'log custom data' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "Confirmation, ideally with custom data entry's ID."
+      - conceptual_operation_name: "Log Custom Data"
+        purpose: "To store any other type of structured or unstructured project-related information (e.g., glossary terms, technical specs, meeting notes), as confirmed by the USER."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "category"
+            type: "string"
+          - name: "key"
+            type: "string"
+          - name: "value" # JSON serializable
+            type: "object or string or number or boolean"
+          - name: "metadata"
+            type: "object"
+            optional: true
+        agent_invocation_guidance: "Consult schema. Example: category 'ProjectGlossary', key 'TermName', value {'definition': '...', 'references': []}."
 
-    get_custom_data:
-      intent: "To retrieve custom data entries."
-      guidance: "ACTION: Perform a 'get custom data' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "List of custom data objects."
+      - conceptual_operation_name: "Get Custom Data"
+        purpose: "To retrieve specific custom data by category and key, or all data for a category."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "category"
+            type: "string"
+          - name: "key"
+            type: "string"
+            optional: true # If omitted, might return all for category
+        agent_invocation_guidance: "Consult schema."
 
-    delete_custom_data:
-      intent: "To delete a specific custom data entry."
-      guidance: "ACTION: Perform a 'delete custom data' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "Confirmation of deletion."
+      - conceptual_operation_name: "Delete Custom Data"
+        purpose: "To delete specific custom data after explicit user confirmation."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "category"
+            type: "string"
+          - name: "key"
+            type: "string"
+        agent_invocation_guidance: "Consult schema. CRITICAL: Confirm with user."
 
-    search_custom_data:
-      intent: "To search custom data by keywords (e.g., in values, keys, or specific categories like ProjectGlossary)."
-      guidance: "ACTION: Perform a 'search custom data' operation (likely FTS-based) with ConPort. Consult schema for the exact operation name and all parameters. Note if a dedicated 'search project glossary' operation exists in schema for targeted glossary searches."
-      expected_result_type: "List of matching custom data objects."
+      - conceptual_operation_name: "Search Custom Data (FTS)"
+        purpose: "When searching for specific terms within any custom data values, categories, or keys."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "query_term"
+            type: "string"
+          - name: "category_filter"
+            type: "string"
+            optional: true
+          - name: "limit"
+            type: "integer"
+            optional: true
+        agent_invocation_guidance: "Consult schema for an FTS-enabled search for custom data. Note if a dedicated 'Search Project Glossary (FTS)' operation exists for targeted glossary searches."
 
-    link_items:
-      intent: "To establish a relationship between two existing ConPort items."
-      guidance: "ACTION: Perform a 'link items' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "Confirmation, ideally with new link's ID."
+      - conceptual_operation_name: "Link ConPort Items"
+        purpose: "When a meaningful relationship is identified and confirmed between two existing ConPort items."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "source_item_type"
+            type: "string" # e.g., "decision"
+          - name: "source_item_id"
+            type: "string or integer"
+          - name: "target_item_type"
+            type: "string" # e.g., "system_pattern"
+          - name: "target_item_id"
+            type: "string or integer"
+          - name: "relationship_type"
+            type: "string" # e.g., "implements", "related_to"
+          - name: "description"
+            type: "string"
+            optional: true
+        agent_invocation_guidance: "Consult schema."
 
-    get_linked_items:
-      intent: "To discover relationships for a specific ConPort item."
-      guidance: "ACTION: Perform a 'get linked items' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "List of link objects or linked item details."
+      - conceptual_operation_name: "Get Linked Items"
+        purpose: "To understand the relationships of a specific ConPort item."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "item_type"
+            type: "string"
+          - name: "item_id"
+            type: "string or integer"
+          - name: "relationship_type_filter"
+            type: "string"
+            optional: true
+          - name: "linked_item_type_filter"
+            type: "string"
+            optional: true
+          - name: "limit"
+            type: "integer"
+            optional: true
+        agent_invocation_guidance: "Consult schema."
 
-    get_item_history:
-      intent: "To review past versions of Product Context or Active Context."
-      guidance: "ACTION: Perform a 'get item history' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "List of historical context version objects."
+      - conceptual_operation_name: "Get Item History"
+        purpose: "When needing to review past versions of Product Context or Active Context."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "item_type" # e.g., "product_context", "active_context"
+            type: "string"
+          - name: "limit"
+            type: "integer"
+            optional: true
+          - name: "version"
+            type: "integer"
+            optional: true
+          - name: "before_timestamp"
+            type: "string" # ISO datetime
+            optional: true
+          - name: "after_timestamp"
+            type: "string" # ISO datetime
+            optional: true
+        agent_invocation_guidance: "Consult schema."
 
-    get_recent_activity_summary:
-      intent: "To get a quick overview of recent project activities stored in ConPort."
-      guidance: "ACTION: Perform a 'get recent activity summary' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "A summary object detailing recent activities across different ConPort data types."
+      - conceptual_operation_name: "Batch Log Items"
+        purpose: "When the user provides a list of multiple items of the SAME conceptual type (e.g., several decisions) to be logged at once."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "item_type" # e.g., "decision", "progress_entry"
+            type: "string"
+          - name: "items" # Array of objects, each matching the schema for a single log operation of that item_type
+            type: "array of objects"
+        agent_invocation_guidance: "Consult schema. Ensure `items` array elements match the single-item logging schema for the specified `item_type`."
 
-    export_data_to_markdown:
-      intent: "To export ConPort data to markdown files for backup or sharing."
-      guidance: "ACTION: Perform an 'export data to markdown' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "Confirmation of export, possibly with path to exported files."
+      - conceptual_operation_name: "Get Recent Activity Summary"
+        purpose: "At the start of a new session to catch up, or when the USER asks for a summary of recent project activities."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "hours_ago"
+            type: "integer"
+            optional: true
+          - name: "since_timestamp"
+            type: "string" # ISO datetime
+            optional: true
+          - name: "limit_per_type"
+            type: "integer"
+            optional: true
+        agent_invocation_guidance: "Consult schema."
 
-    import_data_from_markdown:
-      intent: "To import ConPort data from a directory of markdown files previously exported by this system."
-      guidance: "ACTION: Perform an 'import data from markdown' operation with ConPort. Consult schema for the exact operation name and all parameters. Warn user about potential overwrites/merges."
-      expected_result_type: "Confirmation of import, possibly with summary of items imported/updated."
+      - conceptual_operation_name: "Export ConPort to Markdown"
+        purpose: "When the user requests to export the current ConPort data to markdown files."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "output_path" # Relative to workspace_id
+            type: "string"
+            optional: true
+        agent_invocation_guidance: "Consult schema. Explain default output path if not provided by user."
 
-    batch_log_items:
-      intent: "To log multiple items of the SAME conceptual type (e.g., several decisions) in a single interaction."
-      guidance: "ACTION: Perform a 'batch log items' operation with ConPort. Consult schema for the exact operation name and all parameters."
-      expected_result_type: "Confirmation of batch logging, possibly with status for each item."
+      - conceptual_operation_name: "Import Markdown to ConPort"
+        purpose: "When the user requests to import ConPort data from a directory of markdown files previously exported by this system."
+        typical_parameters_to_expect_in_schema:
+          - name: "workspace_id"
+            type: "string"
+          - name: "input_path" # Relative to workspace_id
+            type: "string"
+            optional: true
+        agent_invocation_guidance: "Consult schema. Warn about potential overwrites or merges if data already exists."
 
   user_driven_memory_sync:
-    trigger_phrases: # Examples for the LLM to recognize this intent from user
+    trigger_phrases: # Examples, adapt to user's phrasing
       - "Sync ConPort"
       - "ConPort Sync"
-      # - "Update project memory" # Keeping one old one for broader compatibility initially, can be removed later
-      # - "Review and update our shared context"
+      - "Update project memory"
     action_summary: |
       If the USER requests a general update or synchronization of the project memory with the ConPort system:
       1. Acknowledge: Inform the USER you will review the recent conversation and update the project memory accordingly.
-      2. Review Chat: Analyze the current chat session for new information, decisions, progress, context changes, and clarifications that should be logged or updated in the ConPort system.
+      2. Review Chat: Analyze the current chat session for new information, decisions, progress, context changes, clarifications, and potential new relationships between items.
       3. Log/Update Systematically:
           - For each piece of information identified:
             - Explain to the USER what type of information you are about to save/update (e.g., "I'll log the decision we just made about the database schema to ConPort.").
-            - ACTION: Interact with the ConPort system using the appropriate conceptual interaction pattern (e.g., 'log_decision', 'update_product_context'). Ensure all required parameters for that interaction type (as discovered from ConPort's schema) are provided.
+            - AGENT_ACTION: Interact with the ConPort system using the appropriate conceptual operation (e.g., 'Log Decision', 'Update Product Context', 'Log Custom Data' for glossary terms). Ensure all required parameters for that operation (as discovered from ConPort's schema) are provided.
+            - Consider operations like 'Log Progress Entry' for tasks, 'Log System Pattern' for new patterns, and 'Link ConPort Items' if relationships are identified.
+            - If many items of the same type were discussed, consider using a 'Batch Log Items' operation if available in the schema.
             - Wait for confirmation from the ConPort system before proceeding to the next piece of information if necessary.
       4. Summarize: After processing updates, briefly inform the USER that the project memory (ConPort) has been synchronized with information from the current session.
     example_flow_note: "This process is iterative. You might make several distinct interactions with the ConPort system sequentially to fully capture all relevant updates from the conversation."
 
   reconfigure_core_guidance:
-    product_active_context: "Product/Active Context are flexible JSON objects. Work with user to define/evolve structure. Update using full `content` or `patch_content` (consult schema)."
-    decisions_progress_patterns: "Decision/Progress/Pattern fields are fixed by ConPort design (discoverable via schema). For different structures/fields, guide user to create new 'Custom Data' category (e.g., category: 'milestones', with custom JSON `value`)."
+    product_active_context: "The internal JSON structure of 'Product Context' and 'Active Context' (typically a `content` field) is flexible. Work with the user to define/evolve this structure via 'Update Product Context' and 'Update Active Context' operations. The ConPort server stores this `content` as a JSON blob. Consult the schema for details on how to provide this `content` (e.g., full object or patch)."
+    decisions_progress_patterns: "The fundamental fields for Decisions, Progress Entries, and System Patterns are usually fixed by ConPort's design (discoverable via its schema). For significantly different structures or additional fields not supported by the dedicated operations, guide the user to create a new 'Custom Data' category (e.g., category: 'project_milestones_detailed', with a custom JSON `value`)."
+
 # --- Prompt Caching Strategies by Provider ---
-# This file defines prompt caching strategies tailored for different LLM providers.
-# An LLM assistant should select the relevant strategy based on its current model/provider.
-
+# This section is assumed to be identical to the one in roo_code_conport_strategy and cascade_conport_strategy.
+# It is included here for completeness if this file is used standalone.
 prompt_caching_strategies:
-  enabled: true # Master switch to enable/disable prompt caching strategies
-
-  # --- Core Mandate (Applies to all enabled providers) ---
+  enabled: true
   core_mandate: |
     Actively seek opportunities to utilize prompt caching when interacting with the target LLM service.
     Primary goals: Reduce token costs and improve response latency.
     Leverage provider-specific caching mechanisms as defined below.
     - Notify user when structuring a prompt for potential caching: [INFO: Structuring prompt for caching]
 
-  # --- Identifying Cacheable Content from ConPort (Applies to all providers) ---
   content_identification:
     description: |
       Criteria for identifying content from ConPort that is suitable for prompt caching.
@@ -266,90 +509,62 @@ prompt_caching_strategies:
         description: "Values from entries known/hinted to be large (e.g., specs, guides) or flagged with 'cache_hint: true' metadata."
       - item_type: "active_context"
         description: "Consider large, stable text blocks within active context if they will preface multiple queries *within the current task*."
-
     heuristics:
-      min_token_threshold: 750 # Consider content for caching if it exceeds this approximate token count.
-      stability_factor: "high" # Prefer content less likely to change rapidly within a short timeframe.
+      min_token_threshold: 750
+      stability_factor: "high"
 
-  # --- User-Defined Cache Hints (Applies to all providers) ---
   user_hints:
     description: |
       Users can provide explicit hints within ConPort item metadata to influence prompt caching decisions.
       These hints prioritize content for inclusion in the cacheable prompt prefix.
-
-    retrieval: |
-      When retrieving ConPort items that support metadata (e.g., `custom_data`), check the `metadata` field for the key `cache_hint`.
+    retrieval_instruction: |
+      When retrieving ConPort items that support metadata (e.g., via a 'Get Custom Data' operation), check the `metadata` field for the key `cache_hint`.
       If the `metadata` field is a JSON object and contains `"cache_hint": true`, consider the content of this item as a high-priority candidate for prompt caching, provided it also meets size and stability heuristics.
-
-    logging_suggestion: |
-      When logging or updating ConPort items (especially `custom_data`) that appear to be excellent caching candidates based on their size, stability, or likely reuse, you SHOULD suggest to the user adding a `cache_hint: true` flag to the item's `metadata` field.
+    logging_suggestion_instruction: |
+      When logging or updating ConPort items (especially 'Custom Data') that appear to be excellent caching candidates based on their size, stability, or likely reuse, you SHOULD suggest to the user adding a `cache_hint: true` flag to the item's `metadata` field.
       Confirm with the user before applying.
       Example suggestion: "This [Item Type, e.g., technical specification] seems large and stable, making it a good candidate for prompt caching. Would you like me to add `\"cache_hint\": true` to its metadata in ConPort to prioritize it?"
 
-  # --- Strategy Note: Local Load vs. Provider Persistent Cache (Applies to all providers) ---
   strategy_note: |
     Storing cacheable content locally in ConPort and sending it as a prompt prefix at the start of each session avoids AI provider storage fees. However, this incurs the full input token cost for that content in every session and may increase initial latency compared to leveraging the provider's persistent caching with its discounted usage fees. The optimal approach depends on session frequency and content size. Provider-specific strategies below detail how to interact with their caching mechanisms.
 
-  # --- Provider Specific Strategies ---
+  provider_specific_strategies:
+    - provider_name: gemini_api # Example for Google Gemini
+      description: Strategy for Google Gemini models which support implicit caching.
+      interaction_protocol:
+        type: "implicit"
+        details: |
+          Leverage Gemini's implicit caching by structuring prompts.
+          1. Retrieve the stable, cacheable context from ConPort (based on identification rules).
+          2. Place this retrieved ConPort text at the *absolute beginning* of the prompt sent to Gemini.
+          3. Append any variable, task-specific parts *after* the stable prefix.
+      staleness_management:
+        details: "Implicit caching typically handles staleness. If prompt prefix changes, the provider processes/re-caches the new prefix."
 
-  gemini_api:
-    description: Strategy for Google Gemini models (e.g., 1.5 Pro, 1.5 Flash) which support implicit caching.
-    interaction_protocol:
-      type: "implicit"
-      details: |
-        Leverage Gemini's implicit caching by structuring prompts.
-        1. Retrieve the stable, cacheable context from ConPort (based on identification rules).
-        2. Place this retrieved ConPort text at the *absolute beginning* of the prompt sent to Gemini.
-        3. Append any variable, task-specific parts (e.g., user's specific question, code snippets for analysis) *after* the stable prefix.
-        Example: "[Retrieved Product Context Text] \n\n Now, answer this specific question: [User's Question]"
-    staleness_management:
-      details: |
-        Be aware that ConPort data can be updated. Cached versions of that data in Gemini have a TTL.
-        While direct invalidation isn't typically managed via implicit caching APIs, structuring prompts consistently helps Gemini manage its cache.
-        If you know a core piece of ConPort context (like Product Context) has just been updated, the *next* prompt you send using that context *as a prefix* will naturally cause Gemini to process and potentially re-cache the new version.
+    - provider_name: anthropic_api # Example for Anthropic Claude
+      description: Strategy for Anthropic Claude models which may require explicit cache control.
+      interaction_protocol:
+        type: "explicit" # Or implicit, depending on specific Claude model/API version
+        details: |
+          If explicit caching (e.g., via `cache_control` breakpoints) is supported:
+          1. Identify cacheable content from ConPort.
+          2. Construct the prompt, inserting cache control markers appropriately.
+          (Refer to specific Anthropic API documentation for exact syntax).
+      staleness_management:
+        details: "If explicit, follow API docs for cache invalidation or TTL. If implicit, similar to Gemini."
 
-  anthropic_api:
-    description: Strategy for Anthropic Claude models (e.g., 3.5 Sonnet, 3 Haiku, 3 Opus) which require explicit cache control.
-    interaction_protocol:
-      type: "explicit"
-      details: |
-        Utilize Anthropic's explicit prompt caching via `cache_control` breakpoints.
-        1. Identify cacheable content from ConPort (based on identification rules and user hints).
-        2. Construct the prompt message payload for the Anthropic API.
-        3. Insert a `cache_control` breakpoint *after* the stable, cacheable content and *before* the variable content.
-        Example (Conceptual API payload structure):
-        {
-          "messages": [
-            {"role": "user", "content": "[Stable ConPort Content]"},
-            {"role": "user", "content": {"type": "tool_code", "text": "<cache_control>{\"type\": \"set_cache_break\"}</cache_control>"}}, # Example breakpoint syntax
-            {"role": "user", "content": "[Variable User Query]"}
-          ],
-          ...
-        }
-        (Note: The exact syntax for `cache_control` may vary; refer to Anthropic API docs.)
-    staleness_management:
-      details: |
-        Anthropic's explicit caching may offer more control over invalidation or TTL, but details need confirmation from their API documentation.
-        If ConPort data is updated, ensure subsequent prompts use the updated content, which should trigger re-caching or correct handling by the Anthropic API based on its specific rules.
+    - provider_name: openai_api # Example for OpenAI
+      description: Strategy for OpenAI models with automatic prompt caching.
+      interaction_protocol:
+        type: "implicit"
+        details: |
+          Leverage OpenAI's automatic prompt caching by structuring prompts (similar to Gemini).
+          Place stable ConPort text at the beginning of the prompt.
+          OpenAI may offer discounts on cached input tokens for prompts over a certain length.
+      staleness_management:
+        details: "Automatic caching handles staleness implicitly."
 
-  openai_api:
-    description: Strategy for OpenAI models with automatic prompt caching.
-    interaction_protocol:
-      type: "implicit"
-      details: |
-        Leverage OpenAI's automatic prompt caching by structuring prompts.
-        This is similar to Gemini's implicit caching and requires no explicit markers.
-        1. Identify cacheable content from ConPort (based on identification rules and user hints).
-        2. Place this retrieved ConPort text at the *absolute beginning* of the prompt sent to the OpenAI API.
-        3. Append any variable, task-specific parts *after* the stable prefix.
-        OpenAI provides a 50% discount on cached input tokens. Caching automatically activates for prompts over a certain length (e.g., >1024 tokens, but verify current documentation).
-    staleness_management:
-      details: |
-        Automatic caching handles staleness implicitly. If prompt prefix changes (e.g., updated ConPort data), OpenAI processes/re-caches new prefix.
-
-  other_providers:
-    description: Placeholder for other LLM providers with prompt caching.
-    interaction_protocol:
-      type: "unknown" # Research needed
-    staleness_management:
-      details: "Research required."
+    - provider_name: other_providers
+      description: Placeholder for other LLM providers.
+      interaction_protocol: "unknown" # Agent/developer must research specific provider's caching.
+      staleness_management: "Research required."
