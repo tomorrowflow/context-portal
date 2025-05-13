@@ -1,6 +1,7 @@
 <div align="center">
 
 # Context Portal MCP (ConPort)
+## (It's a memory bank!)
 
 <br>
 
