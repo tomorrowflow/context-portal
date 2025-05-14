@@ -268,6 +268,63 @@ async def tool_get_progress(
         log.error(f"Error processing args for get_progress: {e}. Args: workspace_id={workspace_id}, status_filter='{status_filter}', parent_id_filter={parent_id_filter}, limit={limit}")
         raise exceptions.ContextPortalError(f"Server error processing get_progress: {type(e).__name__}")
 
+@conport_mcp.tool(name="update_progress", description="Updates an existing progress entry.")
+async def tool_update_progress(
+    workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
+    progress_id: Annotated[int, Field(gt=0, description="The ID of the progress entry to update.")],
+    ctx: MCPContext,
+    status: Annotated[Optional[str], Field(description="New status (e.g., 'TODO', 'IN_PROGRESS', 'DONE')")] = None,
+    description: Annotated[Optional[str], Field(min_length=1, description="New description of the progress or task")] = None,
+    parent_id: Annotated[Optional[int], Field(description="New ID of the parent task, if changing")] = None
+) -> Dict[str, Any]:
+    """
+    MCP tool wrapper for update_progress.
+    Validates arguments and calls the handler.
+    """
+    try:
+        # The model's own validator will check at_least_one_field.
+        pydantic_args = models.UpdateProgressArgs(
+            workspace_id=workspace_id,
+            progress_id=progress_id,
+            status=status,
+            description=description,
+            parent_id=parent_id
+        )
+        return mcp_handlers.handle_update_progress(pydantic_args)
+    except exceptions.ContextPortalError as e: # Specific app errors
+        log.error(f"Error in update_progress handler: {e}")
+        raise
+    except ValueError as e: # Catch Pydantic validation errors from UpdateProgressArgs
+        log.error(f"Validation error for update_progress: {e}. Args: workspace_id={workspace_id}, progress_id={progress_id}, status='{status}', description_present={description is not None}, parent_id={parent_id}")
+        raise exceptions.ContextPortalError(f"Invalid arguments for update_progress: {e}")
+    except Exception as e: # Catch-all for other unexpected errors
+        log.error(f"Unexpected error processing args for update_progress: {e}. Args: workspace_id={workspace_id}, progress_id={progress_id}")
+        raise exceptions.ContextPortalError(f"Server error processing update_progress: {type(e).__name__} - {e}")
+
+@conport_mcp.tool(name="delete_progress_by_id", description="Deletes a progress entry by its ID.")
+async def tool_delete_progress_by_id(
+    workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
+    progress_id: Annotated[int, Field(gt=0, description="The ID of the progress entry to delete.")],
+    ctx: MCPContext
+) -> Dict[str, Any]:
+    """
+    MCP tool wrapper for delete_progress_by_id.
+    Validates arguments and calls the handler.
+    """
+    try:
+        pydantic_args = models.DeleteProgressByIdArgs(
+            workspace_id=workspace_id,
+            progress_id=progress_id
+        )
+        return mcp_handlers.handle_delete_progress_by_id(pydantic_args)
+    except exceptions.ContextPortalError as e: # Specific app errors
+        log.error(f"Error in delete_progress_by_id handler: {e}")
+        raise
+    # No specific ValueError expected from this model's validation
+    except Exception as e: # Catch-all for other unexpected errors
+        log.error(f"Unexpected error processing args for delete_progress_by_id: {e}. Args: workspace_id={workspace_id}, progress_id={progress_id}")
+        raise exceptions.ContextPortalError(f"Server error processing delete_progress_by_id: {type(e).__name__} - {e}")
+
 @conport_mcp.tool(name="log_system_pattern", description="Logs or updates a system/coding pattern.")
 async def tool_log_system_pattern(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
@@ -639,6 +696,44 @@ async def tool_get_recent_activity_summary(
     except Exception as e:
         log.error(f"Error processing args for get_recent_activity_summary: {e}. Args: workspace_id={workspace_id}, hours_ago={hours_ago}, since_timestamp={since_timestamp}")
         raise exceptions.ContextPortalError(f"Server error processing get_recent_activity_summary: {type(e).__name__}")
+
+@conport_mcp.tool(name="semantic_search_conport", description="Performs a semantic search across ConPort data.")
+async def tool_semantic_search_conport(
+    workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
+    query_text: Annotated[str, Field(min_length=1, description="The natural language query text for semantic search.")],
+    ctx: MCPContext,
+    top_k: Annotated[int, Field(default=5, ge=1, le=25, description="Number of top results to return.")] = 5,
+    filter_item_types: Annotated[Optional[List[str]], Field(description="Optional list of item types to filter by (e.g., ['decision', 'custom_data']). Valid types: 'decision', 'system_pattern', 'custom_data', 'progress_entry'.")] = None,
+    filter_tags_include_any: Annotated[Optional[List[str]], Field(description="Optional list of tags; results will include items matching any of these tags.")] = None,
+    filter_tags_include_all: Annotated[Optional[List[str]], Field(description="Optional list of tags; results will include only items matching all of these tags.")] = None,
+    filter_custom_data_categories: Annotated[Optional[List[str]], Field(description="Optional list of categories to filter by if 'custom_data' is in filter_item_types.")] = None
+) -> List[Dict[str, Any]]:
+    """
+    MCP tool wrapper for semantic_search_conport.
+    It validates arguments using SemanticSearchConportArgs Pydantic model and calls the handler.
+    """
+    try:
+        # The model's own validators will check tag filters and custom_data_category_filter.
+        pydantic_args = models.SemanticSearchConportArgs(
+            workspace_id=workspace_id,
+            query_text=query_text,
+            top_k=top_k,
+            filter_item_types=filter_item_types,
+            filter_tags_include_any=filter_tags_include_any,
+            filter_tags_include_all=filter_tags_include_all,
+            filter_custom_data_categories=filter_custom_data_categories
+        )
+        # Ensure the handler is awaited if it's async
+        return await mcp_handlers.handle_semantic_search_conport(pydantic_args)
+    except exceptions.ContextPortalError as e: # Specific app errors
+        log.error(f"Error in semantic_search_conport handler: {e}")
+        raise
+    except ValueError as e: # Catch Pydantic validation errors
+        log.error(f"Validation error for semantic_search_conport: {e}. Args: workspace_id={workspace_id}, query_text='{query_text}'")
+        raise exceptions.ContextPortalError(f"Invalid arguments for semantic_search_conport: {e}")
+    except Exception as e: # Catch-all for other unexpected errors
+        log.error(f"Unexpected error processing args for semantic_search_conport: {e}. Args: workspace_id={workspace_id}, query_text='{query_text}'")
+        raise exceptions.ContextPortalError(f"Server error processing semantic_search_conport: {type(e).__name__} - {e}")
 
 # Mount the FastMCP SSE app to the FastAPI app at the /mcp path
 # This will handle GET for SSE and POST for JSON-RPC client requests

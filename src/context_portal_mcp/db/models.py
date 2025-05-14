@@ -158,6 +158,27 @@ class GetProgressArgs(BaseArgs):
     parent_id_filter: Optional[int] = Field(None, description="Filter entries by parent task ID")
     limit: Optional[int] = Field(None, gt=0, description="Maximum number of entries to return (most recent first)")
 
+# New model for updating a progress entry
+class UpdateProgressArgs(BaseArgs):
+    """Arguments for updating an existing progress entry."""
+    progress_id: int = Field(..., gt=0, description="The ID of the progress entry to update.")
+    status: Optional[str] = Field(None, description="New status (e.g., 'TODO', 'IN_PROGRESS', 'DONE')")
+    description: Optional[str] = Field(None, min_length=1, description="New description of the progress or task")
+    parent_id: Optional[int] = Field(None, description="New ID of the parent task, if changing") # Note: Setting to None might mean clearing parent
+
+    @model_validator(mode='before')
+    @classmethod
+    def check_at_least_one_field(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        status, description, parent_id = values.get('status'), values.get('description'), values.get('parent_id')
+        if status is None and description is None and parent_id is None:
+            raise ValueError("At least one field ('status', 'description', or 'parent_id') must be provided for update.")
+        return values
+
+# New model for deleting a progress entry by ID
+class DeleteProgressByIdArgs(BaseArgs):
+    """Arguments for deleting a progress entry by its ID."""
+    progress_id: int = Field(..., gt=0, description="The ID of the progress entry to delete.")
+
 # --- System Pattern Tools ---
 
 class LogSystemPatternArgs(BaseArgs):
@@ -306,6 +327,33 @@ class GetRecentActivitySummaryArgs(BaseArgs):
             pass # Allow both to be None, handler can set a default (e.g. 24 hours)
         return values
 
+# --- Semantic Search Tool Args ---
+
+class SemanticSearchConportArgs(BaseArgs):
+    """Arguments for performing a semantic search across ConPort data."""
+    query_text: str = Field(..., min_length=1, description="The natural language query text for semantic search.")
+    top_k: int = Field(default=5, ge=1, le=25, description="Number of top results to return.") # Max 25 for now
+    filter_item_types: Optional[List[str]] = Field(default=None, description="Optional list of item types to filter by (e.g., ['decision', 'custom_data']). Valid types: 'decision', 'system_pattern', 'custom_data', 'progress_entry'.")
+    filter_tags_include_any: Optional[List[str]] = Field(default=None, description="Optional list of tags; results will include items matching any of these tags.")
+    filter_tags_include_all: Optional[List[str]] = Field(default=None, description="Optional list of tags; results will include only items matching all of these tags.")
+    filter_custom_data_categories: Optional[List[str]] = Field(default=None, description="Optional list of categories to filter by if 'custom_data' is in filter_item_types.")
+
+    @model_validator(mode='before')
+    @classmethod
+    def check_tag_filters(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        if values.get('filter_tags_include_all') and values.get('filter_tags_include_any'):
+            raise ValueError("Cannot use 'filter_tags_include_all' and 'filter_tags_include_any' simultaneously.")
+        return values
+
+    @model_validator(mode='before')
+    @classmethod
+    def check_custom_data_category_filter(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        item_types = values.get('filter_item_types')
+        category_filter = values.get('filter_custom_data_categories')
+        if category_filter and (not item_types or 'custom_data' not in item_types):
+            raise ValueError("'filter_custom_data_categories' can only be used if 'custom_data' is included in 'filter_item_types'.")
+        return values
+
 # Dictionary mapping tool names to their expected argument models (for potential future use/validation)
 # Note: The primary validation happens in the handler using these models.
 TOOL_ARG_MODELS = {
@@ -334,5 +382,8 @@ TOOL_ARG_MODELS = {
     "batch_log_items": BatchLogItemsArgs,
     "get_item_history": GetItemHistoryArgs,
     "get_conport_schema": GetConportSchemaArgs,
-    "get_recent_activity_summary": GetRecentActivitySummaryArgs, # New tool
+    "get_recent_activity_summary": GetRecentActivitySummaryArgs,
+    "semantic_search_conport": SemanticSearchConportArgs, # New tool
+    "update_progress": UpdateProgressArgs, # New tool
+    "delete_progress_by_id": DeleteProgressByIdArgs, # New tool
 }

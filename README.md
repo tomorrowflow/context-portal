@@ -1,6 +1,7 @@
 <div align="center">
 
 # Context Portal MCP (ConPort)
+## (It's a memory bank!)
 
 <br>
 
@@ -17,9 +18,30 @@ A database-backed Model Context Protocol (MCP) server for managing structured pr
 
 <br>
 
+## TLDR: What is ConPort?
+
+Context Portal (ConPort) is your project's **memory bank**. It's a tool that helps AI assistants understand your specific software project better by storing important information like decisions, tasks, and architectural patterns in a structured way. Think of it as building a project-specific knowledge base that the AI can easily access and use to give you more accurate and helpful responses.
+
+**What it does:**
+
+*   Keeps track of project decisions, progress, and system designs.
+*   Stores custom project data (like glossaries or specs).
+*   Helps AI find relevant project information quickly (like a smart search).
+*   Enables AI to use project context for better responses (RAG).
+*   More efficient for managing, searching, and updating context compared to simple text file-based memory banks.
+
+**Basic Installation:**
+
+1.  Clone the Git repository.
+2.  Use `uv` (recommended) or `venv` to create a Python virtual environment.
+3.  Install dependencies using `uv pip install -r requirements.txt` or `pip install -r requirements.txt`.
+4.  Configure your IDE/client to run the ConPort server in STDIO mode, pointing it to your project workspace.
+
+This structured memory helps your AI assistant stay informed about your project's history and details.
+
 ## Overview
 
-This project is the **Context Portal MCP server (ConPort)**. ConPort provides a robust and structured way for AI assistants to store, retrieve, and manage various types of project context. It effectively builds a **project-specific knowledge graph**, capturing entities like decisions, progress, and architecture, along with their relationships. This structured knowledge base then serves as a powerful backend for **Retrieval Augmented Generation (RAG)**, enabling AI assistants to access precise, up-to-date information for more context-aware and accurate responses.
+This project is the **Context Portal MCP server (ConPort)**. ConPort provides a robust and structured way for AI assistants to store, retrieve, and manage various types of project context. It effectively builds a **project-specific knowledge graph**, capturing entities like decisions, progress, and architecture, along with their relationships. This structured knowledge base, enhanced by **vector embeddings** for semantic search, then serves as a powerful backend for **Retrieval Augmented Generation (RAG)**, enabling AI assistants to access precise, up-to-date information for more context-aware and accurate responses.
 
 It replaces older file-based context management systems by offering a more reliable and queryable database backend (SQLite per workspace). ConPort is designed to be a generic context backend, compatible with various IDEs and client interfaces that support MCP.
 
@@ -30,6 +52,7 @@ Key features include:
 *   Multi-workspace support via `workspace_id`.
 *   Primary deployment mode: STDIO for tight IDE integration.
 *   Enables building a dynamic **project knowledge graph** with explicit relationships between context items.
+*   Includes **vector data storage** and **semantic search** capabilities to power advanced RAG.
 *   Serves as an ideal backend for **Retrieval Augmented Generation (RAG)**, providing AI with precise, queryable project memory.
 *   Provides structured context that AI assistants can leverage for **prompt caching** with compatible LLM providers.
 
@@ -243,7 +266,7 @@ By providing initial context, either through `projectBrief.md` or manual entry, 
 
 ## Available ConPort Tools
 
-The ConPort server exposes the following tools via MCP, allowing interaction with the underlying **project knowledge graph**. These tools facilitate the **Retrieval** aspect crucial for **Augmented Generation (RAG)** by AI agents. All tools require a `workspace_id` argument (string, required) to specify the target project workspace.
+The ConPort server exposes the following tools via MCP, allowing interaction with the underlying **project knowledge graph**. This includes tools for **semantic search** powered by **vector data storage**. These tools facilitate the **Retrieval** aspect crucial for **Augmented Generation (RAG)** by AI agents. All tools require a `workspace_id` argument (string, required) to specify the target project workspace.
 
 *   **Product Context Management:**
     *   `get_product_context`: Retrieves the overall project goals, features, and architecture.
@@ -265,6 +288,10 @@ The ConPort server exposes the following tools via MCP, allowing interaction wit
         *   Args: `status` (str, req), `description` (str, req), `parent_id` (int, opt), `linked_item_type` (str, opt), `linked_item_id` (str, opt).
     *   `get_progress`: Retrieves progress entries.
         *   Args: `status_filter` (str, opt), `parent_id_filter` (int, opt), `limit` (int, opt).
+    *   `update_progress`: Updates an existing progress entry.
+        *   Args: `progress_id` (int, req), `status` (str, opt), `description` (str, opt), `parent_id` (int, opt).
+    *   `delete_progress_by_id`: Deletes a progress entry by its ID.
+        *   Args: `progress_id` (int, req).
 *   **System Pattern Management:**
     *   `log_system_pattern`: Logs or updates a system/coding pattern.
         *   Args: `name` (str, req), `description` (str, opt), `tags` (list[str], opt).
@@ -305,7 +332,7 @@ The ConPort server exposes the following tools via MCP, allowing interaction wit
 
 ## Prompt Caching Strategy
 
-ConPort can be used to provide structured context that AI assistants can leverage for **prompt caching** with compatible LLM providers (like Google Gemini, Anthropic Claude, and OpenAI). Prompt caching reduces token costs and latency by reusing frequently used parts of prompts.
+ConPort can be used to provide structured context (including **vector data** for semantic search) that AI assistants can leverage for **prompt caching** with compatible LLM providers (like Google Gemini, Anthropic Claude, and OpenAI). Prompt caching reduces token costs and latency by reusing frequently used parts of prompts.
 
 This repository includes a detailed strategy file (`context_portal/prompt_caching_strategy.yml`) that defines how an LLM assistant should identify cacheable content from ConPort and structure prompts for different providers.
 

@@ -1,11 +1,12 @@
+# Custom Instructions for AI Model (Cascade ConPort Integration)
+
 # --- External Strategy References ---
-# This section lists external files containing specific strategies or instructions.
-# The LLM assistant should read and incorporate these strategies as needed.
 external_strategies:
   prompt_caching:
     file_path: "context_portal/prompt_caching_strategy.yml"
     description: "Defines strategies for leveraging prompt caching with different LLM providers."
 
+# --- Cascade ConPort Integration Strategy ---
 cascade_conport_integration:
   introduction: |
     These instructions guide Windsurf Cascade on integrating with the ConPort project memory system (MCP plugin).
@@ -27,12 +28,12 @@ cascade_conport_integration:
       If the URI is not a local file path or parsing fails, you may need to ask the USER for the absolute path to the workspace.
 
   interaction_protocol:
-    title: "Strict Adherence Required for ConPort Tool Calls"
+    title: "Strict Adherence Required for ConPort Plugin Calls"
     rules:
-      - "Explain Intent: Before calling any ConPort tool, briefly explain to the USER *why* you are accessing the project memory (e.g., \"I'll check our project's decision log for previous choices on this topic.\")."
-      - "No Tool Names: NEVER mention the specific ConPort tool names (e.g., `get_decisions`) in your conversation with the USER."
-      - "Tool Call Placement: ALL ConPort MCP tool calls (e.g., `use_mcp_tool.../use_mcp_tool`) MUST be placed at the very END of your response message. Do not add any text after the tool call block."
-      - "Wait for Results: If your next action depends on the output of a ConPort tool, ensure you have received and processed the result before proceeding. Your steps can be asynchronous, so explicitly wait if necessary by not requesting new tools until the ConPort result is available."
+      - "Explain Intent: Before calling any ConPort plugin operation, briefly explain to the USER *why* you are accessing the project memory (e.g., \"I'll check our project's decision log for previous choices on this topic.\")."
+      - "No Operation Names to User: NEVER mention the specific ConPort operation names (e.g., `get_decisions`) in your conversation with the USER."
+      - "Tool Call Placement: ALL ConPort MCP tool calls (using the `use_mcp_tool` structure) MUST be placed at the very END of your response message. Do not add any text after the tool call block."
+      - "Wait for Results: If your next action depends on the output of a ConPort operation, ensure you have received and processed the result before proceeding. Explicitly wait if necessary by not requesting new tools until the ConPort result is available."
 
   proactive_memory_management:
     logging_guideline: |
@@ -42,93 +43,497 @@ cascade_conport_integration:
 
   tool_usage_focus:
     primary_use: |
-      Use ConPort tools primarily for managing structured, persistent project knowledge.
+      Use ConPort plugin operations primarily for managing structured, persistent project knowledge.
     complementary_use: |
-      Utilize your native tools (e.g., `Codebase Search`, `View File`) for direct code interaction and general information retrieval.
+      Utilize your native tools (e.g., `Codebase Search`, `View File`, `List Directory`) for direct code interaction and general information retrieval from the file system.
     mcp_server_type: |
-      ConPort is a "tools-only" MCP server. Do not attempt to use MCP `prompts` or `resources` with it.
+      ConPort is a "tools-only" MCP server/plugin. Do not attempt to use MCP `prompts` or `resources` with it.
 
   initialization_guidance:
-    # This guidance assumes the agent has already determined the `ACTUAL_WORKSPACE_ID`.
-    # It also assumes the agent can check for the existence of the ConPort DB file
-    # (e.g., `ACTUAL_WORKSPACE_ID + "/context_portal/context.db"`) using its native file system tools.
-
-    on_existing_db_found: |
-      # If an existing ConPort DB is found for the workspace:
-      1. **Attempt to load existing project memory:** Call relevant ConPort `get_*` tools (e.g., `get_product_context`, `get_active_context`, `get_recent_activity_summary`).
-      2. **Analyze loaded data:**
-         - If data is successfully loaded and seems populated: Inform the USER "ConPort project memory loaded."
-         - If data is minimal/empty despite DB existing: Inform USER "ConPort database found, but seems empty. You can start by defining Product Context."
-         - Proceed with user's task, leveraging loaded context.
-
-    on_no_db_found: |
-      # If NO ConPort DB is found for the workspace:
-      1. Inform USER: "No existing ConPort project memory found for this workspace."
-      2. Ask USER: "Would you like to initialize ConPort for this workspace? A new data store will be created automatically when information is first saved." (Provide Yes/No options).
-      3. **If USER agrees to initialize:**
-         - Inform USER: "Okay, ConPort will be set up for this workspace."
-         - **Check for `projectBrief.md` (ONLY on this initial setup):**
-           - Use your file system tools to check if `projectBrief.md` exists in the workspace root.
-           - If it exists:
-             - Read its content.
-             - Inform USER: "I found a `projectBrief.md` file."
-             - Ask USER: "As we're setting up ConPort, would you like to import its content as the initial Product Context?" (Provide Yes/No options).
-             - If USER agrees:
-               - Prepare a content object for Product Context (e.g., `{"initial_brief": "[content of projectBrief.md]"}`).
-               - Call ConPort's `update_product_context` (or equivalent operation to set Product Context) with this data.
-               - Confirm import result with USER.
-             - Else (`projectBrief.md` not found):
-               - Ask USER: "`projectBrief.md` not found. Would you like to define the initial Product Context manually now?" (Provide Yes/No options).
-               - (If Yes, guide user to provide input for `update_product_context`).
-         - Inform USER: "ConPort is ready. You can now start logging decisions, progress, etc."
-      4. **If USER declines to initialize:**
-         - Inform USER: "Okay, ConPort will not be used for this session for this workspace."
-         - (Agent should operate without relying on ConPort for this workspace).
-
-    on_load_or_setup_failure: |
-      # If any ConPort operations fail unexpectedly during the above, or if initial DB check itself fails:
-      Inform USER: "There was an issue initializing or accessing ConPort project memory. Will proceed without it for now."
-      (Agent should operate without relying on ConPort).
+    # This guidance assumes you have determined the `ACTUAL_WORKSPACE_ID`.
+    # Use your native `List Directory` or `Find` tools to check for the ConPort DB file
+    # (e.g., `ACTUAL_WORKSPACE_ID + "/context_portal/context.db"`).
+    sequences:
+      - name: on_existing_db_found
+        description: "Procedure if an existing ConPort DB is found for the workspace."
+        steps:
+          - step: 1
+            action: |
+              Attempt to load existing project memory by invoking the following ConPort operations (see `conport_operations_reference` for call structures):
+              - `get_product_context`
+              - `get_active_context`
+              - `get_decisions` (e.g., limit 5)
+              - `get_progress` (e.g., limit 5)
+              - `get_system_patterns` (e.g., limit 5)
+              - `get_custom_data` (category: "critical_settings")
+              - `get_custom_data` (category: "ProjectGlossary")
+              - `get_recent_activity_summary` (e.g., last 24h, limit 3 per type)
+          - step: 2
+            action: "Analyze loaded data."
+            conditions:
+              - if: "data is successfully loaded and seems populated"
+                actions:
+                  - "Inform the USER: \"ConPort project memory loaded.\""
+                  - "Proceed with user's task, leveraging loaded context."
+              - if: "data is minimal/empty despite DB existing"
+                actions:
+                  - "Inform USER: \"ConPort database found, but seems empty. You can start by defining Product Context.\""
+                  - "Proceed with user's task, leveraging loaded context (or guiding setup)."
+      - name: on_no_db_found
+        description: "Procedure if NO ConPort DB is found for the workspace."
+        steps:
+          - step: 1
+            action: "Inform USER: \"No existing ConPort project memory found for this workspace.\""
+          - step: 2
+            action: "Ask USER about initializing ConPort."
+            tool_to_use: "ask_followup_question" # This is a placeholder for Cascade's mechanism to ask questions.
+            parameters:
+              question: "Would you like to initialize ConPort for this workspace? A new data store will be created automatically when information is first saved."
+              suggestions:
+                - "Yes, initialize ConPort."
+                - "No, do not use ConPort."
+          - step: 3
+            description: "Process user response to initialization."
+            conditions:
+              - if_user_response_is: "Yes" # Adapt to actual response format
+                actions:
+                  - "Inform USER: \"Okay, ConPort will be set up for this workspace.\""
+                  - description: "Check for `projectBrief.md` (ONLY on this initial setup)."
+                    sub_steps:
+                      - "Use your native `List Directory` or `Find` tool to check if `projectBrief.md` exists in the workspace root (`ACTUAL_WORKSPACE_ID`)."
+                      - description: "Analyze `projectBrief.md` existence."
+                        conditions:
+                          - if: "`projectBrief.md` exists"
+                            actions:
+                              - "Use your native `View File` tool to read its content."
+                              - "Inform USER: \"I found a `projectBrief.md` file.\""
+                              - action: "Ask USER about importing its content."
+                                tool_to_use: "ask_followup_question" # Placeholder
+                                parameters:
+                                  question: "As we're setting up ConPort, would you like to import its content as the initial Product Context?"
+                                  suggestions:
+                                    - "Yes, import its content."
+                                    - "No, skip importing."
+                              - description: "Process user response to import projectBrief.md."
+                                conditions:
+                                  - if_user_response_is: "Yes" # Adapt
+                                    actions:
+                                      - "Prepare a content object for Product Context (e.g., `{\"initial_brief\": \"[content of projectBrief.md]\"}`)."
+                                      - "Invoke ConPort's `update_product_context` operation with this data (see `conport_operations_reference`)."
+                                      - "Confirm import result with USER."
+                          - else: "`projectBrief.md` not found"
+                            actions:
+                              - action: "Ask USER about manual Product Context definition."
+                                tool_to_use: "ask_followup_question" # Placeholder
+                                parameters:
+                                  question: "`projectBrief.md` not found. Would you like to define the initial Product Context manually now?"
+                                  suggestions:
+                                    - "Define Product Context manually."
+                                    - "Skip for now."
+                              - "(If Yes, guide user to provide input for the `update_product_context` ConPort operation)."
+                  - "Inform USER: \"ConPort is ready. You can now start logging decisions, progress, etc.\""
+                  - "Transition to the 'on_existing_db_found' sequence to load (now potentially bootstrapped) contexts."
+              - if_user_response_is: "No" # Adapt
+                action: "Inform USER: \"Okay, ConPort will not be used for this session for this workspace.\""
+      - name: on_load_or_setup_failure
+        description: "Procedure if any ConPort operations fail unexpectedly during initialization, or if initial DB check itself fails."
+        action: |
+          Inform USER: "There was an issue initializing or accessing ConPort project memory. Will proceed without it for now."
 
   configuration_reference:
     server_name_note: |
-      The ConPort server (plugin) is typically named `conport-stdio` (or as configured by the user in `~/.codeium/windsurf/mcp_config.json`).
+      The ConPort server (plugin) is typically named `conport-stdio` (or as configured by the user in `~/.codeium/windsurf/mcp_config.json`). Use this name in the `<server_name>` field of your `use_mcp_tool` calls.
     detailed_strategy_note: |
-      For detailed tool argument structures and advanced usage protocols, use the ConPort `get_conport_schema` tool for direct schema retrieval.
+      This document provides guidance on common ConPort operations. For the most up-to-date and complete schema of all available ConPort operations and their arguments, you can invoke the `get_conport_schema` operation (see `conport_operations_reference`).
+
+  conport_operations_reference:
+    description: |
+      This section details common ConPort operations (tools) available via the ConPort MCP plugin.
+      When invoking these, use the `use_mcp_tool` structure. Remember to replace `ACTUAL_WORKSPACE_ID` with the derived workspace path.
+      Adhere to `interaction_protocol` (explain intent to USER, do not mention operation names to USER, place tool call at the end).
+    operations:
+      - operation_name: get_product_context
+        purpose: "To understand the overall project goals, features, or architecture at any time."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>get_product_context</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID"
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: update_product_context
+        purpose: "When the high-level project description, goals, features, or overall architecture changes significantly, as confirmed by the USER."
+        notes: "Can perform full overwrite with `content` or partial update with `patch_content`. For `patch_content`, to remove a key, set its value to the special string sentinel `\"__DELETE__\"`."
+        mcp_tool_call_structure_full_overwrite: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>update_product_context</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "content": { /* complete new JSON content */ }
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+        mcp_tool_call_structure_partial_update: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>update_product_context</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "patch_content": { "key_to_update": "new_value", "key_to_delete": "__DELETE__" }
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: get_active_context
+        purpose: "To understand the current task focus, immediate goals, or session-specific context."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>get_active_context</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID"
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: update_active_context
+        purpose: "When the current focus of work changes, new questions arise, or session-specific context needs updating, as confirmed by the USER."
+        notes: "Supports `content` for full overwrite and `patch_content` for partial updates (with `__DELETE__` sentinel)."
+        mcp_tool_call_structure_full_overwrite: |
+          # Similar to update_product_context full overwrite
+        mcp_tool_call_structure_partial_update: |
+          # Similar to update_product_context partial update
+      - operation_name: log_decision
+        purpose: "When a significant architectural or implementation decision is made and confirmed by the USER."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>log_decision</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "summary": "Concise summary of the decision",
+              "rationale": "Reasoning behind the decision (optional)",
+              "implementation_details": "How it will be/was implemented (optional)",
+              "tags": ["optional_tag1", "optional_tag2"]
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: get_decisions
+        purpose: "To retrieve a list of past decisions, e.g., to review history or find a specific decision."
+        notes: "Supports `limit`, `tags_filter_include_all`, `tags_filter_include_any`."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>get_decisions</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "limit": 5 # Optional
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: search_decisions_fts
+        purpose: "When searching for decisions by keywords in summary, rationale, details, or tags."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>search_decisions_fts</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "query_term": "search keywords",
+              "limit": 5 # Optional
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: log_progress
+        purpose: "When a task begins, its status changes (e.g., TODO, IN_PROGRESS, DONE), or it's completed. Also when a new sub-task is defined."
+        notes: "Supports `summary`, `status`, `details`, `parent_id`, `linked_item_type`, `linked_item_id`."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>log_progress</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "summary": "Description of the task/progress",
+              "status": "TODO" # Or IN_PROGRESS, DONE, BLOCKED, etc.
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: get_progress
+        purpose: "To review current task statuses, find pending tasks, or check history of progress."
+        notes: "Supports `limit`, `status_filter`, `parent_id_filter`."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>get_progress</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "limit": 5 # Optional
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: log_system_pattern
+        purpose: "When new architectural patterns are introduced, or existing ones are modified, as confirmed by the USER."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>log_system_pattern</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "name": "Pattern Name",
+              "description": "Detailed description of the pattern",
+              "tags": ["optional_tag1"]
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: get_system_patterns
+        purpose: "To retrieve a list of defined system patterns."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>get_system_patterns</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "limit": 5 # Optional
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: log_custom_data
+        purpose: "To store any other type of structured or unstructured project-related information (e.g., glossary terms, technical specs, meeting notes), as confirmed by the USER."
+        notes: "`value` must be JSON serializable. `metadata` is optional."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>log_custom_data</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "category": "ProjectGlossary",
+              "key": "TermName",
+              "value": { "definition": "...", "references": [] }
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: get_custom_data
+        purpose: "To retrieve specific custom data by category and key."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>get_custom_data</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "category": "ProjectGlossary",
+              "key": "TermName"
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: search_project_glossary_fts
+        purpose: "When specifically searching for terms within the 'ProjectGlossary' custom data category."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>search_project_glossary_fts</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID",
+              "query_term": "search term"
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: get_recent_activity_summary
+        purpose: "At the start of a new session to catch up, or when the USER asks for a summary of recent project activities."
+        notes: "Supports `hours_ago`, `since_timestamp`, `limit_per_type`."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>get_recent_activity_summary</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID"
+              // "hours_ago": 24, // Optional
+              // "limit_per_type": 3 // Optional
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      - operation_name: get_conport_schema
+        purpose: "To retrieve the full schema of all available ConPort operations and their arguments. Useful for understanding all capabilities."
+        mcp_tool_call_structure: |
+          <use_mcp_tool>
+          <server_name>conport-stdio</server_name>
+          <tool_name>get_conport_schema</tool_name>
+          <arguments>
+          {
+            "raw_args_from_fastmcp": {
+              "workspace_id": "ACTUAL_WORKSPACE_ID"
+            }
+          }
+          </arguments>
+          </use_mcp_tool>
+      # Add other relevant tools like delete operations, linking, history, batch, import/export if deemed core for Cascade,
+      # always providing the mcp_tool_call_structure.
+      # For brevity in this example, only a subset is detailed. The `get_conport_schema` call can fetch the rest.
 
   user_driven_memory_sync:
-    trigger_phrase_examples: # For Cascade's understanding of when to initiate this
+    trigger_phrase_examples:
       - "Sync ConPort"
       - "ConPort Sync"
-      # - "Update project memory" # Keeping one old one for broader compatibility initially, can be removed later
-      # - "Review and update our shared context"
+      - "Update project memory"
     action_summary: |
       If the USER requests a "ConPort Sync" or similar:
-      1. Acknowledge: Inform the USER with something like "[CONPORT_MEMORY: Syncing with chat session...]" or "Okay, I'll review our discussion and sync relevant information with ConPort."
+      1. Acknowledge: Inform the USER with something like "[CONPORT_MEMORY: Syncing with chat session...]" or "Okay, I'll review our discussion and sync relevant information with the ConPort project memory."
       2. Review Chat: Analyze the current chat session for new information, decisions, progress, context changes, and clarifications that should be logged or updated in ConPort.
       3. Log/Update Systematically:
           - Explain to the USER what type of information you are about to save/update (e.g., "I'll log the decision we just made about the database schema.").
-          - Use the appropriate ConPort tools (e.g., `log_decision`, `update_product_context`, `log_custom_data` for glossary terms) one by one, following all standard interaction protocols (explain intent, no tool names, tool call at end).
-          - For `update_product_context` and `update_active_context`, it's often best to first retrieve the current content, then prepare the new full content or a patch, before calling the update tool.
+          - Invoke the appropriate ConPort operations (e.g., `log_decision`, `update_product_context`, `log_custom_data` for glossary terms) one by one, following all standard interaction protocols. Refer to `conport_operations_reference` for call structures.
+          - For `update_product_context` and `update_active_context`, it's often best to first invoke the corresponding `get_` operation, then prepare the new full content or a patch, before invoking the update operation.
+          - Consider operations like `log_progress` for tasks, `log_system_pattern` for new patterns, and `link_conport_items` if relationships are identified.
       4. Summarize: After processing updates, briefly inform the USER that the project memory has been synchronized.
     example_flow_note: |
-      Process is iterative; multiple tool calls may be needed per sync.
+      Process is iterative; multiple ConPort operation calls may be needed per sync.
+
+  dynamic_context_retrieval_for_rag:
+    title: "Dynamic Context Retrieval for Enhanced Responses (RAG-like)"
+    description: |
+      This strategy guides Windsurf Cascade in dynamically retrieving and assembling context from the ConPort project memory
+      to answer user queries or perform tasks more effectively, akin to Retrieval Augmented Generation (RAG).
+      This complements your native file system and codebase search tools.
+    trigger: "When you need to answer a specific question, perform a task requiring detailed project knowledge from ConPort, or generate content based on ConPort data."
+    goal: "To construct a concise, highly relevant context set from ConPort to inform your responses, improving accuracy and relevance."
+    adherence_note: "Remember to follow all rules in `interaction_protocol` (explain intent to USER, no operation names to USER, tool call at end) when performing these steps."
+    steps:
+      - step: 1
+        action: "Analyze User Query/Task"
+        details: "Deconstruct the user's request to identify key entities, concepts, keywords, and the specific type of information needed from ConPort."
+      - step: 2
+        action: "Prioritized Retrieval Strategy (ConPort Operations)"
+        details: |
+          Based on the analysis, select the most appropriate ConPort operations (refer to `conport_operations_reference` for call structures):
+          - **Targeted FTS:** Use `search_decisions_fts`, `search_project_glossary_fts` (or a more general `search_custom_data_value_fts` if available and appropriate for other categories) for keyword-based searches.
+          - **Specific Item Retrieval:** Use `get_custom_data` (if category/key known), `get_decisions` (by ID or for recent items), `get_system_patterns`, `get_progress` if the query points to specific item types or IDs.
+          - **(Future):** Prioritize semantic search operations from ConPort once available for conceptual queries.
+          - **Broad Context (Fallback):** Use `get_product_context` or `get_active_context` as a fallback if targeted retrieval yields little, but be mindful of their size.
+          - **Complementary Native Tools:** Consider if your native `Codebase Search` or `Find` tools can locate relevant file paths or code snippets that might be logged or referenced in ConPort.
+      - step: 3
+        action: "Retrieve Initial Set from ConPort"
+        details: "Invoke the chosen ConPort operation(s) to retrieve an initial, small set (e.g., top 3-5) of the most relevant items or data snippets. Remember to explain intent to USER before calling."
+      - step: 4
+        action: "Contextual Expansion via ConPort Linking (Optional)"
+        details: "For the most promising items from Step 3, consider using ConPort's `get_linked_items` operation to fetch directly related items (1-hop). This can provide crucial context or disambiguation. Use judiciously."
+      - step: 5
+        action: "Synthesize and Filter Retrieved Information"
+        details: |
+          Review the information retrieved from ConPort (initial set + expanded context).
+          - **Filter:** Discard irrelevant items or parts of items.
+          - **Synthesize/Summarize:** If multiple relevant pieces of information are found, synthesize them into a concise summary that directly addresses the query/task. Extract only the most pertinent sentences or facts.
+          - **Integrate Native Tool Findings:** If native tools like `View File` were used on a path found via ConPort, integrate relevant snippets from that file content here.
+      - step: 6
+        action: "Formulate Response Using Assembled Context"
+        details: |
+          Use the filtered and synthesized information to formulate your response to the USER.
+          - **Attribution (Conceptual):** While you don't tell the USER "From Decision D-42", your internal reasoning should be based on such specific sources. Your explanation of *why* you're doing something (as per `interaction_protocol`) can hint at the type of source (e.g., "Based on our project's logged decisions...").
+          - **Brevity:** Strive for relevance and conciseness in the information used to generate the response.
+    general_principles:
+      - "Prefer targeted retrieval from ConPort over broad context dumps."
+      - "Iterate if initial retrieval is insufficient: try different keywords or ConPort operations."
+      - "Balance context richness with response clarity and token limits."
+
+  proactive_knowledge_graph_linking:
+    title: "Proactive Knowledge Graph Linking"
+    description: |
+      This strategy guides Windsurf Cascade to proactively identify and suggest the creation of links
+      between ConPort items, enriching the project's knowledge graph based on conversational context.
+    trigger: "During ongoing conversation, when you observe potential relationships (e.g., causal, implementational, clarifying) between two or more discussed ConPort items or concepts that are likely represented as ConPort items."
+    goal: "To actively build and maintain a rich, interconnected knowledge graph within ConPort by capturing relationships that might otherwise be missed."
+    adherence_note: "Remember to follow all rules in `interaction_protocol` (explain intent to USER, no operation names to USER, tool call at end) when performing these steps."
+    steps:
+      - step: 1
+        action: "Monitor Conversational Context"
+        details: "Continuously analyze the user's statements and the flow of discussion for mentions of ConPort items (explicitly by ID, or implicitly by well-known names/summaries) and the relationships being described or implied between them."
+      - step: 2
+        action: "Identify Potential Links"
+        details: |
+          Look for patterns such as:
+          - User states "Decision X led to us doing Y (which is Progress item P-3)."
+          - User discusses how System Pattern SP-2 helps address a concern noted in Decision D-5.
+      - step: 3
+        action: "Formulate and Propose Link Suggestion"
+        details: |
+          If a potential link is identified:
+          - Clearly state the items involved (e.g., "Decision D-5", "System Pattern SP-2").
+          - Describe the perceived relationship (e.g., "It seems SP-2 addresses a concern in D-5.").
+          - Propose creating a link using your platform's question-asking mechanism (e.g., `ask_followup_question` placeholder).
+          - Example Question: "I noticed we're discussing Decision D-5 and System Pattern SP-2. It sounds like SP-2 might 'address_concern_in' D-5. Would you like me to create this link in ConPort? You can also suggest a different relationship type."
+          - Suggested Answers (adapt to your platform's capabilities):
+            - "Yes, link them with 'addresses_concern_in'."
+            - "Yes, but use relationship type: [user types here]."
+            - "No, don't link them now."
+          - Offer common relationship types as examples if needed: 'implements', 'clarifies', 'related_to', 'depends_on', 'blocks', 'resolves', 'derived_from'.
+      - step: 4
+        action: "Gather Details and Execute Linking via ConPort"
+        details: |
+          If the user confirms:
+          - Ensure you have the correct source item type, source item ID, target item type, target item ID, and the agreed-upon relationship type.
+          - Ask for an optional brief description for the link if the relationship isn't obvious.
+          - Invoke the ConPort `link_conport_items` operation (refer to `conport_operations_reference` for call structure).
+      - step: 5
+        action: "Confirm Outcome"
+        details: "Inform the USER of the success or failure of the ConPort `link_conport_items` operation call."
+    general_principles:
+      - "Be helpful, not intrusive. If the user declines a suggestion, accept and move on."
+      - "Prioritize clear, strong relationships over tenuous ones."
+      - "This strategy complements the general `proactive_memory_management` -> `logging_guideline` by providing specific guidance for link creation."
 
 # --- Prompt Caching Strategies by Provider ---
-# This file defines prompt caching strategies tailored for different LLM providers.
-# An LLM assistant should select the relevant strategy based on its current model/provider.
-
 prompt_caching_strategies:
-  enabled: true # Master switch to enable/disable prompt caching strategies
-
-  # --- Core Mandate (Applies to all enabled providers) ---
+  enabled: true
   core_mandate: |
     Actively seek opportunities to utilize prompt caching when interacting with the target LLM service.
     Primary goals: Reduce token costs and improve response latency.
     Leverage provider-specific caching mechanisms as defined below.
     - Notify user when structuring a prompt for potential caching: [INFO: Structuring prompt for caching]
 
-  # --- Identifying Cacheable Content from ConPort (Applies to all providers) ---
   content_identification:
     description: |
       Criteria for identifying content from ConPort that is suitable for prompt caching.
@@ -142,90 +547,81 @@ prompt_caching_strategies:
         description: "Values from entries known/hinted to be large (e.g., specs, guides) or flagged with 'cache_hint: true' metadata."
       - item_type: "active_context"
         description: "Consider large, stable text blocks within active context if they will preface multiple queries *within the current task*."
-
     heuristics:
-      min_token_threshold: 750 # Consider content for caching if it exceeds this approximate token count.
-      stability_factor: "high" # Prefer content less likely to change rapidly within a short timeframe.
+      min_token_threshold: 750
+      stability_factor: "high"
 
-  # --- User-Defined Cache Hints (Applies to all providers) ---
   user_hints:
     description: |
       Users can provide explicit hints within ConPort item metadata to influence prompt caching decisions.
       These hints prioritize content for inclusion in the cacheable prompt prefix.
-
-    retrieval: |
+    retrieval_instruction: |
       When retrieving ConPort items that support metadata (e.g., `custom_data`), check the `metadata` field for the key `cache_hint`.
       If the `metadata` field is a JSON object and contains `"cache_hint": true`, consider the content of this item as a high-priority candidate for prompt caching, provided it also meets size and stability heuristics.
-
-    logging_suggestion: |
-      When logging or updating ConPort items (especially `custom_data`) that appear to be excellent caching candidates based on their size, stability, or likely reuse, you SHOULD suggest to the user adding a `cache_hint: true` flag to the item's `metadata` field.
+    logging_suggestion_instruction: |
+      When logging or updating ConPort items (especially `custom_data`) that appear to be excellent caching candidates based on their size, stability, or likely reuse, you SHOULD suggest to the user adding a `cache_hint": true` flag to the item's `metadata` field.
       Confirm with the user before applying.
       Example suggestion: "This [Item Type, e.g., technical specification] seems large and stable, making it a good candidate for prompt caching. Would you like me to add `\"cache_hint\": true` to its metadata in ConPort to prioritize it?"
 
-  # --- Strategy Note: Local Load vs. Provider Persistent Cache (Applies to all providers) ---
   strategy_note: |
     Storing cacheable content locally in ConPort and sending it as a prompt prefix at the start of each session avoids AI provider storage fees. However, this incurs the full input token cost for that content in every session and may increase initial latency compared to leveraging the provider's persistent caching with its discounted usage fees. The optimal approach depends on session frequency and content size. Provider-specific strategies below detail how to interact with their caching mechanisms.
 
-  # --- Provider Specific Strategies ---
-
-  gemini_api:
-    description: Strategy for Google Gemini models (e.g., 1.5 Pro, 1.5 Flash) which support implicit caching.
-    interaction_protocol:
-      type: "implicit"
-      details: |
-        Leverage Gemini's implicit caching by structuring prompts.
-        1. Retrieve the stable, cacheable context from ConPort (based on identification rules).
-        2. Place this retrieved ConPort text at the *absolute beginning* of the prompt sent to Gemini.
-        3. Append any variable, task-specific parts (e.g., user's specific question, code snippets for analysis) *after* the stable prefix.
-        Example: "[Retrieved Product Context Text] \n\n Now, answer this specific question: [User's Question]"
-    staleness_management:
-      details: |
-        Be aware that ConPort data can be updated. Cached versions of that data in Gemini have a TTL.
-        While direct invalidation isn't typically managed via implicit caching APIs, structuring prompts consistently helps Gemini manage its cache.
-        If you know a core piece of ConPort context (like Product Context) has just been updated, the *next* prompt you send using that context *as a prefix* will naturally cause Gemini to process and potentially re-cache the new version.
-
-  anthropic_api:
-    description: Strategy for Anthropic Claude models (e.g., 3.5 Sonnet, 3 Haiku, 3 Opus) which require explicit cache control.
-    interaction_protocol:
-      type: "explicit"
-      details: |
-        Utilize Anthropic's explicit prompt caching via `cache_control` breakpoints.
-        1. Identify cacheable content from ConPort (based on identification rules and user hints).
-        2. Construct the prompt message payload for the Anthropic API.
-        3. Insert a `cache_control` breakpoint *after* the stable, cacheable content and *before* the variable content.
-        Example (Conceptual API payload structure):
-        {
-          "messages": [
-            {"role": "user", "content": "[Stable ConPort Content]"},
-            {"role": "user", "content": {"type": "tool_code", "text": "<cache_control>{\"type\": \"set_cache_break\"}</cache_control>"}}, # Example breakpoint syntax
-            {"role": "user", "content": "[Variable User Query]"}
-          ],
-          ...
-        }
-        (Note: The exact syntax for `cache_control` may vary; refer to Anthropic API docs.)
-    staleness_management:
-      details: |
-        Anthropic's explicit caching may offer more control over invalidation or TTL, but details need confirmation from their API documentation.
-        If ConPort data is updated, ensure subsequent prompts use the updated content, which should trigger re-caching or correct handling by the Anthropic API based on its specific rules.
-
-  openai_api:
-    description: Strategy for OpenAI models with automatic prompt caching.
-    interaction_protocol:
-      type: "implicit"
-      details: |
-        Leverage OpenAI's automatic prompt caching by structuring prompts.
-        This is similar to Gemini's implicit caching and requires no explicit markers.
-        1. Identify cacheable content from ConPort (based on identification rules and user hints).
-        2. Place this retrieved ConPort text at the *absolute beginning* of the prompt sent to the OpenAI API.
-        3. Append any variable, task-specific parts *after* the stable prefix.
-        OpenAI provides a 50% discount on cached input tokens. Caching automatically activates for prompts over a certain length (e.g., >1024 tokens, but verify current documentation).
-    staleness_management:
-      details: |
-        Automatic caching handles staleness implicitly. If prompt prefix changes (e.g., updated ConPort data), OpenAI processes/re-caches new prefix.
-
-  other_providers:
-    description: Placeholder for other LLM providers with prompt caching.
-    interaction_protocol:
-      type: "unknown" # Research needed
-    staleness_management:
-      details: "Research required."
+  provider_specific_strategies:
+    - provider_name: gemini_api
+      description: Strategy for Google Gemini models (e.g., 1.5 Pro, 1.5 Flash) which support implicit caching.
+      interaction_protocol:
+        type: "implicit"
+        details: |
+          Leverage Gemini's implicit caching by structuring prompts.
+          1. Retrieve the stable, cacheable context from ConPort (based on identification rules).
+          2. Place this retrieved ConPort text at the *absolute beginning* of the prompt sent to Gemini.
+          3. Append any variable, task-specific parts (e.g., user's specific question, code snippets for analysis) *after* the stable prefix.
+          Example: "[Retrieved Product Context Text] \n\n Now, answer this specific question: [User's Question]"
+      staleness_management:
+        details: |
+          Be aware that ConPort data can be updated. Cached versions of that data in Gemini have a TTL.
+          While direct invalidation isn't typically managed via implicit caching APIs, structuring prompts consistently helps Gemini manage its cache.
+          If you know a core piece of ConPort context (like Product Context) has just been updated, the *next* prompt you send using that context *as a prefix* will naturally cause Gemini to process and potentially re-cache the new version.
+    - provider_name: anthropic_api
+      description: Strategy for Anthropic Claude models (e.g., 3.5 Sonnet, 3 Haiku, 3 Opus) which require explicit cache control.
+      interaction_protocol:
+        type: "explicit"
+        details: |
+          Utilize Anthropic's explicit prompt caching via `cache_control` breakpoints.
+          1. Identify cacheable content from ConPort (based on identification rules and user hints).
+          2. Construct the prompt message payload for the Anthropic API.
+          3. Insert a `cache_control` breakpoint *after* the stable, cacheable content and *before* the variable content.
+          Example (Conceptual API payload structure):
+          {
+            "messages": [
+              {"role": "user", "content": "[Stable ConPort Content]"},
+              {"role": "user", "content": {"type": "tool_code", "text": "<cache_control>{\"type\": \"set_cache_break\"}</cache_control>"}},
+              {"role": "user", "content": "[Variable User Query]"}
+            ],
+            ...
+          }
+          (Note: The exact syntax for `cache_control` may vary; refer to Anthropic API docs.)
+      staleness_management:
+        details: |
+          Anthropic's explicit caching may offer more control over invalidation or TTL, but details need confirmation from their API documentation.
+          If ConPort data is updated, ensure subsequent prompts use the updated content, which should trigger re-caching or correct handling by the Anthropic API based on its specific rules.
+    - provider_name: openai_api
+      description: Strategy for OpenAI models with automatic prompt caching.
+      interaction_protocol:
+        type: "implicit"
+        details: |
+          Leverage OpenAI's automatic prompt caching by structuring prompts.
+          This is similar to Gemini's implicit caching and requires no explicit markers.
+          1. Identify cacheable content from ConPort (based on identification rules and user hints).
+          2. Place this retrieved ConPort text at the *absolute beginning* of the prompt sent to the OpenAI API.
+          3. Append any variable, task-specific parts *after* the stable prefix.
+          OpenAI provides a 50% discount on cached input tokens. Caching automatically activates for prompts over a certain length (e.g., >1024 tokens, but verify current documentation).
+      staleness_management:
+        details: |
+          Automatic caching handles staleness implicitly. If prompt prefix changes (e.g., updated ConPort data), OpenAI processes/re-caches new prefix.
+    - provider_name: other_providers
+      description: Placeholder for other LLM providers with prompt caching.
+      interaction_protocol:
+        type: "unknown"
+      staleness_management:
+        details: "Research required."
