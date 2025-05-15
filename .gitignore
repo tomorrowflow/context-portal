@@ -1,5 +1,6 @@
 # Development Files
 .roo/
+/memory-bank/
 .roomodes
 generate_mcp_yaml.py
 generate_mcp_yaml
