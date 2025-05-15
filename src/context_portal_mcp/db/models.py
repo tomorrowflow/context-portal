@@ -1,7 +1,7 @@
 """Pydantic models for data validation and structure, mirroring the database schema."""
 
 from pydantic import BaseModel, Field, Json, model_validator
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Annotated
 from datetime import datetime
 
 # --- Base Models ---
@@ -74,7 +74,7 @@ class ActiveContextHistory(BaseModel):
 
 class BaseArgs(BaseModel):
     """Base model for arguments requiring a workspace ID."""
-    workspace_id: str = Field(..., description="Identifier for the workspace (e.g., absolute path)")
+    workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")]
 
 # --- Context Tools ---
 

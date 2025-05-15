@@ -160,9 +160,7 @@ cascade_conport_integration:
           <tool_name>get_product_context</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID"
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID"
           }
           </arguments>
           </use_mcp_tool>
@@ -175,10 +173,8 @@ cascade_conport_integration:
           <tool_name>update_product_context</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "content": { /* complete new JSON content */ }
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID",
+            "content": { /* complete new JSON content */ }
           }
           </arguments>
           </use_mcp_tool>
@@ -188,10 +184,8 @@ cascade_conport_integration:
           <tool_name>update_product_context</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "patch_content": { "key_to_update": "new_value", "key_to_delete": "__DELETE__" }
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID",
+            "patch_content": { "key_to_update": "new_value", "key_to_delete": "__DELETE__" }
           }
           </arguments>
           </use_mcp_tool>
@@ -203,9 +197,7 @@ cascade_conport_integration:
           <tool_name>get_active_context</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID"
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID"
           }
           </arguments>
           </use_mcp_tool>
@@ -224,13 +216,11 @@ cascade_conport_integration:
           <tool_name>log_decision</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "summary": "Concise summary of the decision",
-              "rationale": "Reasoning behind the decision (optional)",
-              "implementation_details": "How it will be/was implemented (optional)",
-              "tags": ["optional_tag1", "optional_tag2"]
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID",
+            "summary": "Concise summary of the decision",
+            "rationale": "Reasoning behind the decision (optional)",
+            "implementation_details": "How it will be/was implemented (optional)",
+            "tags": ["optional_tag1", "optional_tag2"]
           }
           </arguments>
           </use_mcp_tool>
@@ -243,10 +233,8 @@ cascade_conport_integration:
           <tool_name>get_decisions</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "limit": 5 # Optional
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID",
+            "limit": 5 # Optional
           }
           </arguments>
           </use_mcp_tool>
@@ -258,28 +246,24 @@ cascade_conport_integration:
           <tool_name>search_decisions_fts</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "query_term": "search keywords",
-              "limit": 5 # Optional
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID",
+            "query_term": "search keywords",
+            "limit": 5 # Optional
           }
           </arguments>
           </use_mcp_tool>
       - operation_name: log_progress
         purpose: "When a task begins, its status changes (e.g., TODO, IN_PROGRESS, DONE), or it's completed. Also when a new sub-task is defined."
-        notes: "Supports `summary`, `status`, `details`, `parent_id`, `linked_item_type`, `linked_item_id`."
+        notes: "Supports `description`, `status`, `parent_id`, `linked_item_type`, `linked_item_id`."
         mcp_tool_call_structure: |
           <use_mcp_tool>
           <server_name>conport-stdio</server_name>
           <tool_name>log_progress</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "summary": "Description of the task/progress",
-              "status": "TODO" # Or IN_PROGRESS, DONE, BLOCKED, etc.
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID",
+            "description": "Description of the task/progress",
+            "status": "TODO" # Or IN_PROGRESS, DONE, BLOCKED, etc.
           }
           </arguments>
           </use_mcp_tool>
@@ -292,10 +276,8 @@ cascade_conport_integration:
           <tool_name>get_progress</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "limit": 5 # Optional
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID",
+            "limit": 5 # Optional
           }
           </arguments>
           </use_mcp_tool>
@@ -307,12 +289,10 @@ cascade_conport_integration:
           <tool_name>log_system_pattern</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "name": "Pattern Name",
-              "description": "Detailed description of the pattern",
-              "tags": ["optional_tag1"]
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID",
+            "name": "Pattern Name",
+            "description": "Detailed description of the pattern",
+            "tags": ["optional_tag1"]
           }
           </arguments>
           </use_mcp_tool>
@@ -324,28 +304,24 @@ cascade_conport_integration:
           <tool_name>get_system_patterns</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "limit": 5 # Optional
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID"
+            // "limit": 5 # Optional - Note: limit is not a parameter for get_system_patterns
           }
           </arguments>
           </use_mcp_tool>
       - operation_name: log_custom_data
         purpose: "To store any other type of structured or unstructured project-related information (e.g., glossary terms, technical specs, meeting notes), as confirmed by the USER."
-        notes: "`value` must be JSON serializable. `metadata` is optional."
+        notes: "`value` must be JSON serializable."
         mcp_tool_call_structure: |
           <use_mcp_tool>
           <server_name>conport-stdio</server_name>
           <tool_name>log_custom_data</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "category": "ProjectGlossary",
-              "key": "TermName",
-              "value": { "definition": "...", "references": [] }
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID",
+            "category": "ProjectGlossary",
+            "key": "TermName",
+            "value": { "definition": "...", "references": [] }
           }
           </arguments>
           </use_mcp_tool>
@@ -357,11 +333,9 @@ cascade_conport_integration:
           <tool_name>get_custom_data</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "category": "ProjectGlossary",
-              "key": "TermName"
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID",
+            "category": "ProjectGlossary",
+            "key": "TermName"
           }
           </arguments>
           </use_mcp_tool>
@@ -373,10 +347,8 @@ cascade_conport_integration:
           <tool_name>search_project_glossary_fts</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID",
-              "query_term": "search term"
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID",
+            "query_term": "search term"
           }
           </arguments>
           </use_mcp_tool>
@@ -389,11 +361,9 @@ cascade_conport_integration:
           <tool_name>get_recent_activity_summary</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID"
-              // "hours_ago": 24, // Optional
-              // "limit_per_type": 3 // Optional
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID"
+            // "hours_ago": 24, // Optional
+            // "limit_per_type": 3 // Optional
           }
           </arguments>
           </use_mcp_tool>
@@ -405,9 +375,7 @@ cascade_conport_integration:
           <tool_name>get_conport_schema</tool_name>
           <arguments>
           {
-            "raw_args_from_fastmcp": {
-              "workspace_id": "ACTUAL_WORKSPACE_ID"
-            }
+            "workspace_id": "ACTUAL_WORKSPACE_ID"
           }
           </arguments>
           </use_mcp_tool>

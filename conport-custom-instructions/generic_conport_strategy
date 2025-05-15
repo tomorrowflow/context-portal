@@ -111,7 +111,7 @@ conport_memory_strategy:
   general_guidance:
     status_prefix: "Begin EVERY response with either '[CONPORT_ACTIVE]' or '[CONPORT_INACTIVE]' to indicate ConPort system status."
     proactive_logging_cue: "Throughout the conversation, identify opportunities to log or update project information in the ConPort system (e.g., if the user outlines a new plan, makes a decision, or defines a term). ALWAYS confirm with the user before logging new information or making updates to ConPort, explaining what you intend to save."
-    workspace_id_note: "All interactions with the ConPort system require the `ACTUAL_WORKSPACE_ID`. Note: When interacting with ConPort (which often uses the FastMCP library), tool-specific arguments like `ACTUAL_WORKSPACE_ID` are typically nested within a `raw_args_from_fastmcp` field in the actual request payload. The schema obtained from the 'Get ConPort Schema' operation should confirm this structure."
+    workspace_id_note: "All interactions with the ConPort system require the `ACTUAL_WORKSPACE_ID`. The schema obtained from the 'Get ConPort Schema' operation will confirm the exact structure for tool arguments, where `workspace_id` will be a direct parameter for each tool."
     schema_discovery_imperative: "CRITICAL: The ConPort system provides a 'Get ConPort Schema' operation. You MUST use this at the start of the session (after confirming ConPort availability, as per `load_existing_conport_context`) to discover all available ConPort operations, their exact names, and required/optional parameters. All subsequent interactions described below MUST use the information obtained from this live schema."
     user_communication_protocol:
       - "Explain Intent: Before performing any ConPort operation, briefly explain to the USER *why* you are accessing/modifying the project memory (e.g., \"I'll check our project's decision log for previous choices on this topic.\")."
@@ -230,13 +230,10 @@ conport_memory_strategy:
         typical_parameters_to_expect_in_schema:
           - name: "workspace_id"
             type: "string"
-          - name: "summary"
+          - name: "description"
             type: "string"
           - name: "status"
             type: "string" # e.g., TODO, IN_PROGRESS, DONE
-          - name: "details"
-            type: "string"
-            optional: true
           - name: "parent_id" # For sub-tasks
             type: "string or integer"
             optional: true
@@ -283,9 +280,6 @@ conport_memory_strategy:
         typical_parameters_to_expect_in_schema:
           - name: "workspace_id"
             type: "string"
-          - name: "limit"
-            type: "integer"
-            optional: true
           - name: "tags_filter_include_all"
             type: "array of strings"
             optional: true
@@ -311,9 +305,6 @@ conport_memory_strategy:
             type: "string"
           - name: "value" # JSON serializable
             type: "object or string or number or boolean"
-          - name: "metadata"
-            type: "object"
-            optional: true
         agent_invocation_guidance: "Consult schema. Example: category 'ProjectGlossary', key 'TermName', value {'definition': '...', 'references': []}."
 
       - conceptual_operation_name: "Get Custom Data"
