@@ -317,6 +317,30 @@ ConPort automatically creates its database at `your_project_workspace/context_po
 
 <br>
 
+## Clearing Python Bytecode Cache
+
+Sometimes, after updating or reinstalling ConPort, you might encounter unexpected behavior or errors due to stale Python bytecode files (`.pyc`) stored in `__pycache__` directories. Clearing this cache can resolve such issues.
+
+You can use the `find` command on Unix-like systems (Linux, macOS, WSL) to locate and remove these files and directories.
+
+1.  **Remove `__pycache__` directories:**
+    ```bash
+    find . -type d -name "__pycache__" -exec rm -rf {} +
+    ```
+
+2.  **Remove `.pyc` files:**
+    ```bash
+    find . -type f -name "*.pyc" -delete
+    ```
+
+**Where to run these commands:**
+
+The directory where you should run these commands depends on how you installed ConPort:
+
+*   **If installed from the Git repository:** Run these commands from the root directory of your cloned `context-portal` repository.
+*   **If installed via PyPI:** Run these commands from within the site-packages directory of the Python environment where ConPort is installed (e.g., from the root of your virtual environment's `lib/pythonX.Y/site-packages/`).
+*   **If running from the Docker image:** You would typically run these commands *inside* the running Docker container using `docker exec <container_id> <command>`.
+
 ## Usage with LLM Agents (Custom Instructions)
 
 ConPort's effectiveness with LLM agents is significantly enhanced by providing specific custom instructions or system prompts to the LLM. This repository includes tailored strategy files for different environments:
@@ -460,33 +484,6 @@ By using ConPort to manage your project's knowledge and providing the LLM assist
 For a more in-depth understanding of ConPort's design, architecture, and advanced usage patterns, please refer to:
 *   [`conport_mcp_deep_dive.md`](https://github.com/GreatScottyMac/context-portal/blob/main/conport_mcp_deep_dive.md)
 
-## Troubleshooting and Maintenance
-
-This section provides guidance on common issues and maintenance tasks for ConPort.
-
-### Clearing Python Bytecode Cache
-
-Sometimes, after updating or reinstalling ConPort, you might encounter unexpected behavior or errors due to stale Python bytecode files (`.pyc`) stored in `__pycache__` directories. Clearing this cache can resolve such issues.
-
-You can use the `find` command on Unix-like systems (Linux, macOS, WSL) to locate and remove these files and directories.
-
-1.  **Remove `__pycache__` directories:**
-    ```bash
-    find . -type d -name "__pycache__" -exec rm -rf {} +
-    ```
-
-2.  **Remove `.pyc` files:**
-    ```bash
-    find . -type f -name "*.pyc" -delete
-    ```
-
-**Where to run these commands:**
-
-The directory where you should run these commands depends on how you installed ConPort:
-
-*   **If installed from the Git repository:** Run these commands from the root directory of your cloned `context-portal` repository.
-*   **If installed via PyPI:** Run these commands from within the site-packages directory of the Python environment where ConPort is installed (e.g., from the root of your virtual environment's `lib/pythonX.Y/site-packages/`).
-*   **If running from the Docker image:** You would typically run these commands *inside* the running Docker container using `docker exec <container_id> <command>`.
 
 ## Contributing
 
