@@ -98,6 +98,25 @@ python3 -m venv .venv  # Or 'python -m venv .venv'
 
 Activation commands are the same as for `uv` above.
 
+<br>
+
+**Install ConPort via PyPi:**
+
+The PyPI installation command for context-portal-mcp using uv is:
+
+```bash
+uv pip install context-portal-mcp
+```
+
+<br>
+
+If you are using standard pip within a virtual environment, the command is:
+
+```bash
+pip install context-portal-mcp
+```
+
+<br>
 
 ### Configuration for PyPI Installation
 
