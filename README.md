@@ -346,13 +346,28 @@ The directory where you should run these commands depends on how you installed C
 ConPort's effectiveness with LLM agents is significantly enhanced by providing specific custom instructions or system prompts to the LLM. This repository includes tailored strategy files for different environments:
 
 *   **For Roo Code:**
-    *   [`roo_code_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/conport-custom-instructions/roo_code_conport_strategy): Contains detailed instructions for LLMs operating within the Roo Code IDE, guiding them on how to use ConPort tools for context management.
+    *   [`roo_code_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/conport-custom-instructions/roo_code_conport_strategy): Contains detailed instructions for LLMs operating within the Roo Code VS Code extension, guiding them on how to use ConPort tools for context management.
+
+    <br>
+
 *   **For CLine:**
-    *   [`cline_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/conport-custom-instructions/cline_conport_strategy): Instructions optimized for LLMs interacting via a command-line interface that supports ConPort.
+    *   [`cline_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/conport-custom-instructions/cline_conport_strategy): Contains detailed instructions for LLMs operating within the Cline VS Code extension, guiding them on how to use ConPort tools for context management.
+
+    <br>
+
 *   **For Windsurf Cascade:**
-    *   [`cascade_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/conport-custom-instructions/cascade_conport_strategy): Specific guidance for LLMs integrated with the Windsurf Cascade environment. *Important*: When initiating a session in Cascade, it is necessary to explicity tell the LLM `Initialize according to custom instructions.`
+    *   [`cascade_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/conport-custom-instructions/cascade_conport_strategy): Specific guidance for LLMs integrated with the Windsurf Cascade environment. *Important*: When initiating a session in Cascade, it is necessary to explicity tell the LLM:
+    
+    ```
+    Initialize according to custom instructions
+    ```
+
+    <br>
+
 *   **For General/Platform-Agnostic Use:**
     *   [`generic_conport_strategy`](https://github.com/GreatScottyMac/context-portal/blob/main/conport-custom-instructions/generic_conport_strategy): Provides a platform-agnostic set of instructions for any MCP-capable LLM. It emphasizes using ConPort's `get_conport_schema` operation to dynamically discover the exact ConPort tool names and their parameters, guiding the LLM on *when* and *why* to perform conceptual interactions (like logging a decision or updating product context) rather than hardcoding specific tool invocation details.
+
+    <br>
 
 **How to Use These Strategy Files:**
 
