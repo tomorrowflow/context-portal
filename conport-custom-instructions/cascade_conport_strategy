@@ -1,11 +1,5 @@
 # Custom Instructions for AI Model (Cascade ConPort Integration)
 
-# --- External Strategy References ---
-external_strategies:
-  prompt_caching:
-    file_path: "context_portal/prompt_caching_strategy.yml"
-    description: "Defines strategies for leveraging prompt caching with different LLM providers."
-
 # --- Cascade ConPort Integration Strategy ---
 cascade_conport_integration:
   introduction: |

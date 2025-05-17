@@ -1,11 +1,5 @@
 # Custom Instructions for AI Model (Generic ConPort Integration)
 
-# --- External Strategy References ---
-external_strategies:
-  prompt_caching:
-    file_path: "context_portal/prompt_caching_strategy.yml" # Assumed to be accessible by the agent
-    description: "Defines strategies for leveraging prompt caching with different LLM providers."
-
 # --- ConPort Memory Strategy (Generic AI Agent) ---
 conport_memory_strategy:
   workspace_id_source: "The AI agent must obtain the absolute path to the current project workspace. This identifier (referred to as `ACTUAL_WORKSPACE_ID`) is critical for all interactions with the ConPort system, as ConPort manages context on a per-workspace basis. The method for obtaining this (e.g., from an environment variable, a direct API from the host IDE, or by asking the user) will depend on the agent's capabilities."

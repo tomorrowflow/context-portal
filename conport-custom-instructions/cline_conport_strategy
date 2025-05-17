@@ -1,11 +1,5 @@
 # Custom Instructions for AI Model
 
-# --- External Strategy References ---
-external_strategies:
-  prompt_caching:
-    file_path: "context_portal/prompt_caching_strategy.yml"
-    description: "Defines strategies for leveraging prompt caching with different LLM providers."
-
 # --- ConPort Memory Strategy ---
 conport_memory_strategy:
   workspace_id_source: "The agent must obtain the absolute path to the current workspace to use as `workspace_id` for all ConPort tool calls. This might be available as `${workspaceFolder}` or require asking the user."
