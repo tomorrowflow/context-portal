@@ -4,16 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "context-portal-mcp"
-version = "0.1.5"
+version = "0.1.6"
 authors = [
   { name="Your Name", email="your.email@example.com" }, # Placeholder
 ]
 description = "A Model Context Protocol (MCP) server for managing structured project context."
 readme = "README.md"
+license = {file = "LICENSE"}
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License", # Assuming MIT based on LICENSE file
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
