@@ -29,7 +29,7 @@ dependencies = [
 "Homepage" = "https://github.com/GreatScottyMac/context-portal" # Assuming this is the main repo
 
 [project.scripts]
-conport-mcp = "context_portal_mcp.main:main" # Define an entry point script
+conport-mcp = "context_portal_mcp.main:cli_entry_point" # Define an entry point script
 
 [tool.setuptools.packages.find]
 where = ["src"] # Look for packages in the src directory
