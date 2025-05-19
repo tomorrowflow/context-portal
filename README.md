@@ -303,8 +303,6 @@ Note the use of double backslashes `\\` for paths in JSON strings.
 *   **First argument in `args`**: This must be the absolute path to the `main.py` script within your `context-portal` installation.
 *   **`--workspace_id "${workspaceFolder}"`**: This tells ConPort which project's context to manage. `${workspaceFolder}` should be resolved by your IDE to the current project's root path.
 
-**Key Takeaway:** ConPort critically relies on an accurate `--workspace_id` to identify the target project. Ensure this argument correctly resolves to the absolute path of your project workspace, either through IDE variables like `${workspaceFolder}` or by providing a direct absolute path.
-
 When installed via cloned Git repository, the IDE will typically construct and run a command similar to this:
     
 ```bash
@@ -314,6 +312,20 @@ uv run python /path/to/your/context-portal/src/context_portal_mcp/main.py --mode
 `/path/to/your/context-portal/` is the absolute path where you cloned the `context-portal` repository.
 `"/actual/path/to/your/project_workspace"` is the absolute path to the root of the project whose context ConPort will manage (e.g., `${workspaceFolder}` in VS Code).
 ConPort automatically creates its database at `your_project_workspace/context_portal/context.db`.
+
+<br>
+
+**Purpose of the `--workspace_id` Command-Line Argument:**
+
+When you launch the ConPort server, particularly in STDIO mode (`--mode stdio`), the `--workspace_id` argument serves several key purposes:
+
+1.  **Initial Server Context:** It provides the server process with the absolute path to the project workspace it should initially be associated with.
+2.  **Critical Safety Check:** In STDIO mode, this path is used to perform a vital check that prevents the server from mistakenly creating its database files (`context.db`, `conport_vector_data/`) inside its own installation directory. This protects against misconfigurations where the client might not correctly provide the workspace path.
+3.  **Client Launch Signal:** It's the standard way for an MCP client (like an IDE extension) to signal to the server which project it is launching for.
+
+**Important Note:** The `--workspace_id` provided at server startup is **not** automatically used as the `workspace_id` parameter for every subsequent MCP tool call. ConPort tools are designed to require the `workspace_id` parameter explicitly in each call (e.g., `get_product_context({"workspace_id": "..."})`). This design supports the possibility of a single server instance managing multiple workspaces and ensures clarity for each operation. Your client IDE/MCP client is responsible for providing the correct `workspace_id` with each tool call.
+
+**Key Takeaway:** ConPort critically relies on an accurate `--workspace_id` to identify the target project. Ensure this argument correctly resolves to the absolute path of your project workspace, either through IDE variables like `${workspaceFolder}` or by providing a direct absolute path.
 
 <br>
 
