@@ -88,7 +88,7 @@ def handle_log_decision(args: models.LogDecisionArgs) -> Dict[str, Any]:
                     "conport_item_type": "decision",
                     "summary": logged_decision.summary,
                     "timestamp_created": logged_decision.timestamp.isoformat(),
-                    "tags": logged_decision.tags if logged_decision.tags else []
+                    "tags": ", ".join(logged_decision.tags) if logged_decision.tags else None
                 }
                 vector_store_service.upsert_item_embedding(
                     workspace_id=args.workspace_id,
@@ -360,7 +360,7 @@ def handle_log_system_pattern(args: models.LogSystemPatternArgs) -> Dict[str, An
                     "conport_item_type": "system_pattern",
                     "name": logged_pattern.name,
                     "timestamp_created": logged_pattern.timestamp.isoformat(), # Assuming SystemPattern has a timestamp
-                    "tags": logged_pattern.tags if logged_pattern.tags else []
+                    "tags": ", ".join(logged_pattern.tags) if logged_pattern.tags else None
                 }
                 vector_store_service.upsert_item_embedding(
                     workspace_id=args.workspace_id,
