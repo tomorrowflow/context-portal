@@ -16,6 +16,7 @@ conport_export/
 code-complexity-server/
 install_rooflow_conport.*
 dev/
+conport-export/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

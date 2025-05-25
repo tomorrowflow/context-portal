@@ -699,35 +699,17 @@ def _format_product_context_md(data: Dict[str, Any]) -> str:
 
 def _format_active_context_md(data: Dict[str, Any]) -> str:
     lines = ["# Active Context\n"]
-    # Expected keys: introduction, currentFocus, recentChanges, openQuestionsIssues
-    if data.get("introduction"):
-        lines.append(data["introduction"].strip() + "\n\n")
-    
-    if data.get("currentFocus"):
-        lines.append("## Current Focus\n")
-        lines.append(data["currentFocus"].strip() + "\n\n")
-    
-    if data.get("recentChanges"):
-        lines.append("## Recent Changes\n")
-        if isinstance(data["recentChanges"], list):
-            for item in data["recentChanges"]:
-                lines.append(f"*   {str(item).strip()}\n")
-            lines.append("\n")
-        elif isinstance(data["recentChanges"], str):
-            lines.append(data["recentChanges"].strip() + "\n\n")
-        else:
-            lines.append(str(data["recentChanges"]) + "\n\n")
-
-    if data.get("openQuestionsIssues"):
-        lines.append("## Open Questions/Issues\n")
-        if isinstance(data["openQuestionsIssues"], list):
-            for item in data["openQuestionsIssues"]:
-                lines.append(f"*   {str(item).strip()}\n")
-            lines.append("\n")
-        elif isinstance(data["openQuestionsIssues"], str):
-            lines.append(data["openQuestionsIssues"].strip() + "\n\n")
-        else:
-            lines.append(str(data["openQuestionsIssues"]) + "\n\n")
+    for key, value in data.items():
+        heading = key.replace("_", " ").title()
+        lines.append(f"## {heading}\n")
+        if isinstance(value, str):
+            lines.append(value.strip() + "\n")
+        elif isinstance(value, list):
+            for item in value:
+                lines.append(f"*   {item}\n")
+        else: # Fallback for other types
+            lines.append(str(value) + "\n")
+        lines.append("\n")
     return "".join(lines)
 
 def _format_decisions_md(decisions: List[models.Decision]) -> str:
