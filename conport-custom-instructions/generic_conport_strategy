@@ -1,5 +1,3 @@
-# Custom Instructions for AI Model
-
 # --- ConPort Memory Strategy ---
 conport_memory_strategy:
   workspace_id_source: "The agent must obtain the absolute path to the current workspace to use as `workspace_id` for all ConPort tool calls. This might be available as `${workspaceFolder}` or require asking the user."
