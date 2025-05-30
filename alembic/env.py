@@ -2,6 +2,7 @@ from logging.config import fileConfig
 
 import sqlite3
 from pathlib import Path
+from sqlalchemy import create_engine # Import create_engine
 
 from alembic import context
 
@@ -64,7 +65,12 @@ def run_migrations_online() -> None:
     # Extract the file path from the URL
     db_path = Path(db_url.replace("sqlite:///", ""))
 
-    with sqlite3.connect(db_path) as connection:
+    # This connection is for Alembic's internal use, not for direct SQL execution
+    # It must be wrapped in a SQLAlchemy engine to provide the 'dialect' attribute
+    # even though we are doing manual migrations.
+    engine = create_engine(db_url)
+
+    with engine.connect() as connection: # Use engine.connect() to get a connection with dialect
         context.configure(
             connection=connection, target_metadata=None # Explicitly None for manual migrations
         )
