@@ -359,7 +359,7 @@ When you launch the ConPort server, particularly in STDIO mode (`--mode stdio`),
 
 <br>
 
-For pre-upgrade cleanup, including clearing Python bytecode cache, please refer to the [v0.2.2_UPDATE_GUIDE.md](v0.2.2_UPDATE_GUIDE.md#1-pre-upgrade-cleanup).
+For pre-upgrade cleanup, including clearing Python bytecode cache, please refer to the [v0.2.3_UPDATE_GUIDE.md](v0.2.3_UPDATE_GUIDE.md#1-pre-upgrade-cleanup).
 
 **Where to run these commands:**
 
@@ -541,5 +541,5 @@ Details on contributing to the ConPort project will be added here in the future.
  
 ## Database Migration & Update Guide
  
-For detailed instructions on how to manage your `context.db` file, especially when updating ConPort across versions that include database schema changes, please refer to the dedicated [v0.2.2_UPDATE_GUIDE.md](v0.2.2_UPDATE_GUIDE.md). This guide provides steps for manual data migration (export/import) if needed, and troubleshooting tips.
+For detailed instructions on how to manage your `context.db` file, especially when updating ConPort across versions that include database schema changes, please refer to the dedicated [v0.2.3_UPDATE_GUIDE.md](v0.2.3_UPDATE_GUIDE.md). This guide provides steps for manual data migration (export/import) if needed, and troubleshooting tips.
 
