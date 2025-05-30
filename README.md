@@ -1,6 +1,6 @@
 <div align="center">
 
-**⚠️ Please see [v0.2.2_UPDATE_GUIDE.md](https://github.com/GreatScottyMac/context-portal/blob/main/v0.2.2_UPDATE_GUIDE.md) if updating from a previous version of Context Portal MCP ⚠️**
+**⚠️ Please see [v0.2.3_UPDATE_GUIDE.md](https://github.com/GreatScottyMac/context-portal/blob/main/v0.2.3_UPDATE_GUIDE.md) if updating from a previous version of Context Portal MCP ⚠️**
 
 <br>
 
