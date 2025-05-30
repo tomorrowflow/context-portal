@@ -1,5 +1,9 @@
 <div align="center">
 
+**⚠️ Please see [v0.2.2_UPDATE_GUIDE.md](https://github.com/GreatScottyMac/context-portal/blob/main/v0.2.2_UPDATE_GUIDE.md) if updating from a previous version of Context Portal MCP ⚠️**
+
+<br>
+
 # Context Portal MCP (ConPort)
 
 ## (It's a memory bank!)
