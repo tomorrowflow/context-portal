@@ -186,11 +186,6 @@ If you installed ConPort via PyPI (`pip install context-portal-mcp`), the ConPor
 - `--log-file`: Optional: Path to a file where server logs will be written. If not provided, logs are directed to `stderr` (console). Useful for persistent logging and debugging server behavior.
 - `--log-level`: Optional: Sets the minimum logging level for the server. Valid choices are `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Defaults to `INFO`. Set to `DEBUG` for verbose output during development or troubleshooting.
 
-When installed via PyPI, the `conport-mcp` command is available directly in your virtual environment's PATH. The command to run the server simplifies to:
-
-```bash
-conport-mcp --mode stdio --workspace_id "/actual/path/to/your/project_workspace"
-```
 
 <br>
 
@@ -364,22 +359,7 @@ When you launch the ConPort server, particularly in STDIO mode (`--mode stdio`),
 
 <br>
 
-## Clearing Python Bytecode Cache
-
-Sometimes, after updating or reinstalling ConPort, you might encounter unexpected behavior or errors due to stale Python bytecode files (`.pyc`) stored in `__pycache__` directories. Clearing this cache can resolve such issues.
-
-You can use the `find` command on Unix-like systems (Linux, macOS, WSL) to locate and remove these files and directories.
-
-1.  **Remove `__pycache__` directories:**
-
-    ```bash
-    find . -type d -name "__pycache__" -exec rm -rf {} +
-    ```
-
-2.  **Remove `.pyc` files:**
-    ```bash
-    find . -type f -name "*.pyc" -delete
-    ```
+For pre-upgrade cleanup, including clearing Python bytecode cache, please refer to the [v0.2.2_UPDATE_GUIDE.md](v0.2.2_UPDATE_GUIDE.md#1-pre-upgrade-cleanup).
 
 **Where to run these commands:**
 
@@ -556,10 +536,10 @@ For a more in-depth understanding of ConPort's design, architecture, and advance
 
 Details on contributing to the ConPort project will be added here in the future.
 ## License
- 
-This project is licensed under the [Apache-2.0 license](https://github.com/GreatScottyMac/context-portal#).
+ This project is licensed under the [Apache-2.0 license](LICENSE).
+  
  
 ## Database Migration & Update Guide
  
-For detailed instructions on how to manage your `context.db` file, especially when updating ConPort across versions that include database schema changes, please refer to the dedicated [UPDATE_GUIDE.md](UPDATE_GUIDE.md). This guide provides steps for manual data migration (export/import) if needed, and troubleshooting tips.
+For detailed instructions on how to manage your `context.db` file, especially when updating ConPort across versions that include database schema changes, please refer to the dedicated [v0.2.2_UPDATE_GUIDE.md](v0.2.2_UPDATE_GUIDE.md). This guide provides steps for manual data migration (export/import) if needed, and troubleshooting tips.
 

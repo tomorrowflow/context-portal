@@ -19,6 +19,7 @@ dev/
 conport-export/
 logs/
 .idea/
+conport_migration_test_backup/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -41,6 +41,7 @@ class ProgressEntry(BaseModel):
 class SystemPattern(BaseModel):
     """Model for the system_patterns table."""
     id: Optional[int] = None # Auto-incremented by DB
+    timestamp: datetime = Field(default_factory=datetime.utcnow) # Added timestamp
     name: str # Should be unique
     description: Optional[str] = None
     tags: Optional[List[str]] = Field(None, description="Optional tags for categorization")
