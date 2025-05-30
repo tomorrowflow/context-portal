@@ -116,6 +116,8 @@ conport_memory_strategy:
   general:
     status_prefix: "Begin EVERY response with either '[CONPORT_ACTIVE]' or '[CONPORT_INACTIVE]'."
     proactive_logging_cue: "Remember to proactively identify opportunities to log or update ConPort based on the conversation (e.g., if user outlines a new plan, consider logging decisions or progress). Confirm with the user before logging."
+    proactive_error_handling: "When encountering errors (e.g., tool failures, unexpected output), proactively log the error details using `log_custom_data` (category: 'ErrorLogs', key: 'timestamp_error_summary') and consider updating active context with open issues if it's a persistent problem. Prioritize using ConPort's item history or recent activity summary to diagnose issues if they relate to past context changes."
+    semantic_search_emphasis: "For complex or nuanced queries, especially when direct keyword search (e.g., `search_decisions_fts`, `search_custom_data_value_fts`) might be insufficient, prioritize using semantic search to leverage conceptual understanding and retrieve more relevant context. Explain to the user why semantic search is being used."
 
   conport_updates:
     frequency: "UPDATE CONPORT THROUGHOUT THE CHAT SESSION, WHEN SIGNIFICANT CHANGES OCCUR, OR WHEN EXPLICITLY REQUESTED."
@@ -141,16 +143,17 @@ conport_memory_strategy:
         action_description: |
           # Agent Action: Invoke `get_active_context` (`{"workspace_id": "..."}`). Result is a direct dictionary.
       - name: update_active_context
-        trigger: "When the current focus of work changes, new questions arise, or session-specific context needs updating, as confirmed by the user."
+        trigger: "When the current focus of work changes, new questions arise, or session-specific context needs updating (e.g., `current_focus`, `open_issues`), as confirmed by the user."
         action_description: |
           <thinking>
           - Active context needs updating.
-          - Step 1: (Optional) Invoke `get_active_context`.
-          - Step 2: Prepare `content` (overwrite) or `patch_content` (partial update).
-          - Use `\"__DELETE__\"` sentinel for key removal in `patch_content`.
-          - Confirm changes.
+          - Step 1: (Optional) Invoke `get_active_context` to retrieve the current state.
+          - Step 2: Prepare `content` (for full overwrite) or `patch_content` (for partial update).
+          - Common fields to update include `current_focus`, `open_issues`, and other session-specific data.
+          - To remove a key using `patch_content`, set its value to the special string sentinel `\"__DELETE__\"`.
+          - Confirm changes with the user.
           </thinking>
-          # Agent Action: Invoke `update_active_context` (`{"workspace_id": "...", "content": {...}}` or `{"workspace_id": "...", "patch_content": {"key_to_update": "new_value"}}`).
+          # Agent Action: Invoke `update_active_context` (`{"workspace_id": "...", "content": {...}}` or `{"workspace_id": "...", "patch_content": {"current_focus": "new_focus", "open_issues": ["issue1", "issue2"], "key_to_delete": "__DELETE__"}}`).
       - name: log_decision
         trigger: "When a significant architectural or implementation decision is made and confirmed by the user."
         action_description: |
@@ -175,6 +178,14 @@ conport_memory_strategy:
         trigger: "To review current task statuses, find pending tasks, or check history of progress."
         action_description: |
           # Agent Action: Invoke `get_progress` (`{"workspace_id": "...", "status_filter": "...", "parent_id_filter": ID, "limit": N}}`).
+      - name: update_progress
+        trigger: "Updates an existing progress entry."
+        action_description: |
+          # Agent Action: Invoke `update_progress` (`{"workspace_id": "...", "progress_id": ID, "status": "...", "description": "...", "parent_id": ID}}`).
+      - name: delete_progress_by_id
+        trigger: "Deletes a progress entry by its ID."
+        action_description: |
+          # Agent Action: Invoke `delete_progress_by_id` (`{"workspace_id": "...", "progress_id": ID}}`).
       - name: log_system_pattern
         trigger: "When new architectural patterns are introduced, or existing ones are modified, as confirmed by the user."
         action_description: |
@@ -207,6 +218,10 @@ conport_memory_strategy:
         trigger: "When specifically searching for terms within the 'ProjectGlossary' custom data category."
         action_description: |
           # Agent Action: Invoke `search_project_glossary_fts` (`{"workspace_id": "...", "query_term": "...", "limit": N}}`).
+      - name: semantic_search_conport
+        trigger: "When a natural language query requires conceptual understanding beyond keyword matching, or when direct keyword searches are insufficient."
+        action_description: |
+          # Agent Action: Invoke `semantic_search_conport` (`{"workspace_id": "...", "query_text": "...", "top_k": N, "filter_item_types": ["decision", "custom_data"]}}`). Explain filters.
       - name: link_conport_items
         trigger: "When a meaningful relationship is identified and confirmed between two existing ConPort items (e.g., a decision is implemented by a system pattern, a progress item tracks a decision)."
         action_description: |
@@ -222,7 +237,7 @@ conport_memory_strategy:
       - name: get_item_history
         trigger: "When needing to review past versions of Product Context or Active Context, or to see when specific changes were made."
         action_description: |
-          # Agent Action: Invoke `get_item_history` (`{"workspace_id":"...", "item_type":"product_context" or "active_context", "limit":N, "version":V, "before_timestamp":"ISO_DATETIME", "after_timestamp":"ISO_DATETIME"}`).
+          # Agent Action: Invoke `get_item_history` (`{"workspace_id": "...", "item_type": "product_context" or "active_context", "limit": N, "version": V, "before_timestamp": "ISO_DATETIME", "after_timestamp": "ISO_DATETIME"}`).
       - name: batch_log_items
         trigger: "When the user provides a list of multiple items of the SAME type (e.g., several decisions, multiple new glossary terms) to be logged at once."
         action_description: |
@@ -230,23 +245,23 @@ conport_memory_strategy:
           - User provided multiple items. Verify they are of the same loggable type.
           - Construct the `items` list, where each element is a dictionary of arguments for the single-item log tool (e.g., for `log_decision`).
           </thinking>
-          # Agent Action: Invoke `batch_log_items` (`{"workspace_id":"...", "item_type":"decision", "items": [{"summary":"...", "rationale":"..."}, {"summary":"..."}] }`).
+          # Agent Action: Invoke `batch_log_items` (`{"workspace_id": "...", "item_type": "decision", "items": [{"summary": "...", "rationale": "..."}, {"summary": "..."}]}`).
       - name: get_recent_activity_summary
         trigger: "At the start of a new session to catch up, or when the user asks for a summary of recent project activities."
         action_description: |
-          # Agent Action: Invoke `get_recent_activity_summary` (`{"workspace_id":"...", "hours_ago":H, "since_timestamp":"ISO_DATETIME", "limit_per_type":N}`). Explain default if no time args.
+          # Agent Action: Invoke `get_recent_activity_summary` (`{"workspace_id": "...", "hours_ago": H, "since_timestamp": "ISO_DATETIME", "limit_per_type": N}`). Explain default if no time args.
       - name: get_conport_schema
         trigger: "If there's uncertainty about available ConPort tools or their arguments during a session (internal LLM check), or if an advanced user specifically asks for the server's tool schema."
         action_description: |
-          # Agent Action: Invoke `get_conport_schema` (`{"workspace_id":"..."}`). Primarily for internal LLM reference or direct user request.
+          # Agent Action: Invoke `get_conport_schema` (`{"workspace_id": "..."}`). Primarily for internal LLM reference or direct user request.
       - name: export_conport_to_markdown
         trigger: "When the user requests to export the current ConPort data to markdown files (e.g., for backup, sharing, or version control)."
         action_description: |
-          # Agent Action: Invoke `export_conport_to_markdown` (`{"workspace_id":"...", "output_path":"optional/relative/path"}`). Explain default output path if not provided.
+          # Agent Action: Invoke `export_conport_to_markdown` (`{"workspace_id": "...", "output_path": "optional/relative/path"}`). Explain default output path if not provided.
       - name: import_markdown_to_conport
         trigger: "When the user requests to import ConPort data from a directory of markdown files previously exported by this system."
         action_description: |
-          # Agent Action: Invoke `import_markdown_to_conport` (`{"workspace_id":"...", "input_path":"optional/relative/path"}`). Explain default input path. Warn about potential overwrites or merges if data already exists.
+          # Agent Action: Invoke `import_markdown_to_conport` (`{"workspace_id": "...", "input_path": "optional/relative/path"}`). Explain default input path. Warn about potential overwrites or merges if data already exists.
       - name: reconfigure_core_guidance
         type: guidance
         product_active_context: "The internal JSON structure of 'Product Context' and 'Active Context' (the `content` field) is flexible. Work with the user to define and evolve this structure via `update_product_context` and `update_active_context`. The server stores this `content` as a JSON blob."
@@ -268,6 +283,8 @@ conport_memory_strategy:
       agent_action_plan_illustrative:
         - "Log new decisions (use `log_decision`)."
         - "Log task progress/status changes (use `log_progress`)."
+        - "Update existing progress entries (use `update_progress`)."
+        - "Delete progress entries (use `delete_progress_by_id`)."
         - "Log new system patterns (use `log_system_pattern`)."
         - "Update Active Context (use `get_active_context` then `update_active_context` with full or patch)."
         - "Update Product Context if significant changes (use `get_product_context` then `update_product_context` with full or patch)."
