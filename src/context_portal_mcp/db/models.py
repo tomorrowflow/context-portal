@@ -48,6 +48,7 @@ class SystemPattern(BaseModel):
 class CustomData(BaseModel):
     """Model for the custom_data table."""
     id: Optional[int] = None # Auto-incremented by DB
+    timestamp: datetime = Field(default_factory=datetime.utcnow) # Added timestamp
     category: str
     key: str
     value: Any # Store arbitrary JSON data (SQLAlchemy handles JSON str conversion for DB)
