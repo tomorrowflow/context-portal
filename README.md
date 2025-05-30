@@ -46,6 +46,7 @@ Key features include:
 - Includes **vector data storage** and **semantic search** capabilities to power advanced RAG.
 - Serves as an ideal backend for **Retrieval Augmented Generation (RAG)**, providing AI with precise, queryable project memory.
 - Provides structured context that AI assistants can leverage for **prompt caching** with compatible LLM providers.
+- Manages database schema evolution using **Alembic migrations**, ensuring seamless updates and data integrity.
 
 ## Prerequisites
 
@@ -109,6 +110,9 @@ The PyPI installation command for context-portal-mcp using uv is:
 ```bash
 uv pip install context-portal-mcp
 ```
+
+**Important Note on Database Migrations:**
+Starting with version `0.1.9`, ConPort uses Alembic for database schema management. When you update your `context-portal-mcp` package and restart the server, Alembic will automatically apply any necessary database schema upgrades to your `context_portal/context.db` file. This process is designed to be seamless and preserve your existing data.
 
 <br>
 
@@ -239,6 +243,9 @@ These instructions guide you through setting up ConPort by cloning its Git repos
       ```bash
       uv pip install -r requirements.txt
       ```
+
+      **Important Note on Database Migrations:**
+      Starting with version `0.1.9`, ConPort uses Alembic for database schema management. When you update your local repository and restart the server, Alembic will automatically apply any necessary database schema upgrades to your `context_portal/context.db` file. This process is designed to be seamless and preserve your existing data.
 
       _Note: `uv` can often detect and use the `.venv` in the current directory even without explicit activation for `uv pip install` commands. However, activation is still good practice, especially if you intend to run Python scripts directly._
 
@@ -548,8 +555,11 @@ For a more in-depth understanding of ConPort's design, architecture, and advance
 ## Contributing
 
 Details on contributing to the ConPort project will be added here in the future.
-
 ## License
-
+ 
 This project is licensed under the [Apache-2.0 license](https://github.com/GreatScottyMac/context-portal#).
+ 
+## Database Migration & Update Guide
+ 
+For detailed instructions on how to manage your `context.db` file, especially when updating ConPort across versions that include database schema changes, please refer to the dedicated [UPDATE_GUIDE.md](UPDATE_GUIDE.md). This guide provides steps for manual data migration (export/import) if needed, and troubleshooting tips.
 

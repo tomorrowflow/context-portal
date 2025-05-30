@@ -4,11 +4,18 @@ import sqlite3
 import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta # Added timedelta
+from datetime import datetime, timedelta
+
+from alembic.config import Config
+from alembic import command
+from logging.config import fileConfig
+import logging # Import logging to configure Alembic's logger
 
 from ..core.config import get_database_path
 from ..core.exceptions import DatabaseError, ConfigurationError
 from . import models # Import models from the same directory
+
+log = logging.getLogger(__name__) # Get a logger for this module
 
 # --- Connection Handling ---
 
@@ -19,12 +26,16 @@ def get_db_connection(workspace_id: str) -> sqlite3.Connection:
     if workspace_id in _connections:
         return _connections[workspace_id]
 
+    db_path = get_database_path(workspace_id)
+    
+    # Run migrations before connecting to ensure schema is up-to-date
+    # This will create the database file if it doesn't exist
+    run_migrations(db_path)
+
     try:
-        db_path = get_database_path(workspace_id)
         conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
         conn.row_factory = sqlite3.Row # Access columns by name
         _connections[workspace_id] = conn
-        initialize_database(conn) # Ensure tables exist
         return conn
     except ConfigurationError as e:
         raise DatabaseError(f"Configuration error getting DB path for {workspace_id}: {e}")
@@ -42,7 +53,35 @@ def close_all_connections():
     for workspace_id in list(_connections.keys()):
         close_db_connection(workspace_id)
 
-# --- Database Initialization ---
+# --- Alembic Migration Integration ---
+
+def run_migrations(db_path: Path):
+    """
+    Runs Alembic migrations to upgrade the database to the latest version.
+    This function is called on database connection to ensure schema is up-to-date.
+    """
+    alembic_cfg = Config("alembic.ini")
+    
+    # Override sqlalchemy.url in alembic.ini to point to the specific workspace's DB
+    # This is crucial for multi-workspace support.
+    alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+
+    # Configure logging for Alembic to prevent excessive output or unhandled loggers
+    # Only configure if not already configured by fileConfig (which happens in env.py)
+    if not logging.getLogger('alembic').handlers:
+        fileConfig(alembic_cfg.config_file_name)
+        logging.getLogger('alembic').setLevel(logging.INFO) # Set Alembic's logger level
+        logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING) # Reduce SQLAlchemy noise
+
+    try:
+        log.info(f"Running Alembic migrations for database: {db_path}")
+        command.upgrade(alembic_cfg, "head")
+        log.info(f"Alembic migrations completed successfully for {db_path}.")
+    except Exception as e:
+        log.error(f"Alembic migration failed for {db_path}: {e}", exc_info=True)
+        raise DatabaseError(f"Database migration failed: {e}")
+
+# --- Database Initialization (Removed - now handled by Alembic) ---
 
 def initialize_database(conn: sqlite3.Connection):
     """Creates database tables if they don't exist."""
