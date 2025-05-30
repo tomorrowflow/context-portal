@@ -111,8 +111,6 @@ The PyPI installation command for context-portal-mcp using uv is:
 uv pip install context-portal-mcp
 ```
 
-**Important Note on Database Migrations:**
-Starting with version `0.1.9`, ConPort uses Alembic for database schema management. When you update your `context-portal-mcp` package and restart the server, Alembic will automatically apply any necessary database schema upgrades to your `context_portal/context.db` file. This process is designed to be seamless and preserve your existing data.
 
 <br>
 
@@ -244,8 +242,6 @@ These instructions guide you through setting up ConPort by cloning its Git repos
       uv pip install -r requirements.txt
       ```
 
-      **Important Note on Database Migrations:**
-      Starting with version `0.1.9`, ConPort uses Alembic for database schema management. When you update your local repository and restart the server, Alembic will automatically apply any necessary database schema upgrades to your `context_portal/context.db` file. This process is designed to be seamless and preserve your existing data.
 
       _Note: `uv` can often detect and use the `.venv` in the current directory even without explicit activation for `uv pip install` commands. However, activation is still good practice, especially if you intend to run Python scripts directly._
 
