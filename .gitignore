@@ -20,6 +20,8 @@ conport-export/
 logs/
 .idea/
 conport_migration_test_backup/
+alembic/
+alembic.ini
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

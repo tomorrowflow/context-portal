@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "context-portal-mcp"
-version = "0.2.3"
+version = "0.2.4"
 authors = [
-  { name="Your Name", email="your.email@example.com" }, # Placeholder
+  { name="Scott McLeod", email="contextportal@gmail.com" },
 ]
 description = "A Model Context Protocol (MCP) server for managing structured project context."
 readme = "README.md"
@@ -28,20 +28,16 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/GreatScottyMac/context-portal" # Assuming this is the main repo
+"Homepage" = "https://github.com/GreatScottyMac/context-portal" 
 
 [project.scripts]
-conport-mcp = "context_portal_mcp.main:cli_entry_point" # Define an entry point script
+conport-mcp = "context_portal_mcp.main:cli_entry_point" 
 
 [tool.setuptools.packages.find]
-where = ["src"] # Look for packages in the src directory
+where = ["src"] 
 
+[tool.setuptools.package-data]
+"context_portal_mcp" = ["templates/**/*"]
 
 [tool.setuptools]
 include-package-data = true # Include data files specified in MANIFEST.in or package_data
-# Explicitly include the alembic directory and alembic.ini from the root
-# These are crucial for migrations when installed via PyPI
-[tool.setuptools.data-files]
-"" = ["alembic.ini"] # Install alembic.ini to the root of the site-packages
-"alembic" = ["alembic/env.py", "alembic/README", "alembic/script.py.mako"]
-"alembic/versions" = ["alembic/versions/068b7234d6a7_initial_database_schema.py"]

@@ -2,18 +2,20 @@
 
 import sqlite3
 import json
+import os
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 
 from alembic.config import Config
 from alembic import command
-from logging.config import fileConfig
-import logging # Import logging to configure Alembic's logger
+import logging
 
 from ..core.config import get_database_path
 from ..core.exceptions import DatabaseError, ConfigurationError
 from . import models # Import models from the same directory
+import shutil # For copying directories
+import inspect # For getting the current file's path to find templates
 
 log = logging.getLogger(__name__) # Get a logger for this module
 
@@ -23,6 +25,7 @@ _connections: Dict[str, sqlite3.Connection] = {}
 
 def get_db_connection(workspace_id: str) -> sqlite3.Connection:
     """Gets or creates a database connection for the given workspace."""
+    """Gets or creates a database connection for the given workspace."""
     if workspace_id in _connections:
         return _connections[workspace_id]
 
@@ -30,7 +33,7 @@ def get_db_connection(workspace_id: str) -> sqlite3.Connection:
     
     # Run migrations before connecting to ensure schema is up-to-date
     # This will create the database file if it doesn't exist
-    run_migrations(db_path)
+    run_migrations(db_path, Path(workspace_id))
 
     try:
         conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
@@ -55,249 +58,104 @@ def close_all_connections():
 
 # --- Alembic Migration Integration ---
 
-def run_migrations(db_path: Path):
+def ensure_alembic_files_exist(workspace_root_dir: Path):
+    """
+    Ensures that alembic.ini and the alembic/ directory exist in the workspace root.
+    If not, copies them from the server's internal templates.
+    """
+    alembic_ini_path = workspace_root_dir / Path("alembic.ini")
+    alembic_dir_path = workspace_root_dir / Path("alembic")
+
+    # Determine the path to the installed templates within the ConPort package
+    # This script is at src/context_portal_mcp/db/database.py
+    # Templates are at src/context_portal_mcp/templates/alembic/
+    current_file_dir = Path(inspect.getfile(ensure_alembic_files_exist)).parent
+    log.debug(f"ensure_alembic_files_exist: current_file_dir = {current_file_dir}")
+    conport_package_root = current_file_dir.parent # This should be .../context_portal_mcp
+    log.debug(f"ensure_alembic_files_exist: conport_package_root = {conport_package_root}")
+    template_alembic_dir = conport_package_root / "templates" / "alembic"
+    log.debug(f"ensure_alembic_files_exist: template_alembic_dir = {template_alembic_dir}")
+
+    # Check for alembic.ini
+    if not alembic_ini_path.exists():
+        log.debug(f"alembic.ini not found at {alembic_ini_path}. Attempting to provision.")
+        template_ini_path = template_alembic_dir / "alembic.ini"
+        if template_ini_path.exists():
+            try:
+                log.info(f"Copying missing alembic.ini from templates to {alembic_ini_path}")
+                shutil.copy2(template_ini_path, alembic_ini_path)
+                log.debug(f"alembic.ini copied. Exists: {alembic_ini_path.exists()}")
+            except shutil.Error as e:
+                log.error(f"Failed to copy alembic.ini: {e}")
+                raise DatabaseError(f"Failed to provision alembic.ini: {e}")
+        else:
+            log.warning(f"Template alembic.ini not found at {template_ini_path}. Cannot auto-provision.")
+
+    # Check for alembic/ directory
+    if not alembic_dir_path.exists():
+        log.debug(f"alembic/ directory not found at {alembic_dir_path}. Attempting to provision.")
+        template_scripts_dir = template_alembic_dir / "alembic"
+        if template_scripts_dir.is_dir():
+            try:
+                log.info(f"Copying missing alembic/ scripts from templates to {alembic_dir_path}")
+                shutil.copytree(template_scripts_dir, alembic_dir_path, dirs_exist_ok=True)
+                log.debug(f"alembic/ directory copied. Exists: {alembic_dir_path.exists()}")
+            except shutil.Error as e:
+                log.error(f"Failed to copy alembic/ directory: {e}")
+                raise DatabaseError(f"Failed to provision alembic/ directory: {e}")
+        else:
+            log.warning(f"Template alembic/ directory not found at {template_scripts_dir}. Cannot auto-provision.")
+
+def run_migrations(db_path: Path, project_root_dir: Path):
     """
     Runs Alembic migrations to upgrade the database to the latest version.
     This function is called on database connection to ensure schema is up-to-date.
     """
-    alembic_cfg = Config("alembic.ini")
+    # Construct the absolute path to alembic.ini and the scripts directory
+    # using the provided project_root_dir
+    alembic_ini_path = project_root_dir / Path("alembic.ini")
+    alembic_scripts_path = project_root_dir / Path("alembic")
+
+    # Initialize Alembic Config with the path to alembic.ini
+    log.debug(f"Alembic: Current working directory (os.getcwd()): {os.getcwd()}")
+    log.debug(f"Alembic: Initializing Config with alembic_ini_path = {alembic_ini_path.resolve()}")
+    log.debug(f"Alembic: Setting script_location to alembic_scripts_path = {alembic_scripts_path.resolve()}")
+    alembic_cfg = Config(str(alembic_ini_path))
     
+    # Explicitly set the script location as a main option.
+    # This is often more robust than relying on the .ini file or cmd_opts for this specific setting.
+    alembic_cfg.set_main_option("script_location", str(alembic_scripts_path))
+
     # Override sqlalchemy.url in alembic.ini to point to the specific workspace's DB
     # This is crucial for multi-workspace support.
     alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
 
-    # Configure logging for Alembic to prevent excessive output or unhandled loggers
-    # Only configure if not already configured by fileConfig (which happens in env.py)
-    if not logging.getLogger('alembic').handlers:
-        fileConfig(alembic_cfg.config_file_name)
-        logging.getLogger('alembic').setLevel(logging.INFO) # Set Alembic's logger level
-        logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING) # Reduce SQLAlchemy noise
+    # Configure logging for Alembic (optional, can be done via Python's root logger)
+    # The fileConfig call was causing issues and is not strictly necessary if alembic.ini
+    # is only used for script_location and sqlalchemy.url.
+    # Alembic's command.upgrade will handle its own logging if not explicitly configured.
 
+    log.debug(f"Alembic Config: script_location = {alembic_cfg.get_main_option('script_location')}")
+    log.debug(f"Alembic Config: sqlalchemy.url = {alembic_cfg.get_main_option('sqlalchemy.url')}")
+
+    # Add explicit path existence check
+    resolved_script_path = Path(alembic_cfg.get_main_option('script_location'))
+    log.debug(f"Alembic: Resolved script path for existence check: {resolved_script_path}")
+    if not resolved_script_path.exists():
+        log.error(f"Alembic: CRITICAL - Script directory {resolved_script_path} does NOT exist according to Python!")
+        raise DatabaseError(f"Alembic scripts directory not found: {resolved_script_path}")
+    else:
+        log.info(f"Alembic: Script directory {resolved_script_path} confirmed to exist by Python.")
+
+    log.info(f"Running Alembic migrations for database: {db_path}")
     try:
-        log.info(f"Running Alembic migrations for database: {db_path}")
+        cursor = None # Initialize cursor to None
         command.upgrade(alembic_cfg, "head")
         log.info(f"Alembic migrations completed successfully for {db_path}.")
     except Exception as e:
         log.error(f"Alembic migration failed for {db_path}: {e}", exc_info=True)
         raise DatabaseError(f"Database migration failed: {e}")
 
-# --- Database Initialization (Removed - now handled by Alembic) ---
-
-def initialize_database(conn: sqlite3.Connection):
-    """Creates database tables if they don't exist."""
-    cursor = conn.cursor()
-    try:
-        # Product Context (Single Row)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS product_context (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                content TEXT NOT NULL DEFAULT '{}'
-            )
-        """)
-        # Ensure the single row exists
-        cursor.execute("INSERT OR IGNORE INTO product_context (id, content) VALUES (1, '{}')")
-
-        # Active Context (Single Row)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS active_context (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                content TEXT NOT NULL DEFAULT '{}'
-            )
-        """)
-        # Ensure the single row exists
-        cursor.execute("INSERT OR IGNORE INTO active_context (id, content) VALUES (1, '{}')")
-
-        # Decisions
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS decisions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TIMESTAMP NOT NULL,
-                summary TEXT NOT NULL,
-                rationale TEXT,
-                implementation_details TEXT,
-                tags TEXT -- JSON stringified list of tags
-            )
-        """)
-        try:
-            cursor.execute("ALTER TABLE decisions ADD COLUMN tags TEXT")
-        except sqlite3.OperationalError as e:
-            if "duplicate column name: tags" in str(e).lower(): # Or use a more specific error check if available
-                pass # Column already exists, ignore
-            else:
-                raise # Re-raise other operational errors
-
-        # FTS5 table for decisions
-        cursor.execute("DROP TABLE IF EXISTS decisions_fts") # Drop to ensure recreation with new schema if needed
-        cursor.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS decisions_fts USING fts5(
-                summary,
-                rationale,
-                implementation_details,
-                tags, -- Ensure tags column is definitely part of FTS
-                tokenize = 'porter unicode61'
-            )
-        """)
-
-        # Triggers to keep decisions_fts synchronized with decisions table
-        # Re-creating triggers to ensure they use the correct schema for decisions_fts
-        cursor.execute("DROP TRIGGER IF EXISTS decisions_ai")
-        cursor.execute("""
-            CREATE TRIGGER decisions_ai AFTER INSERT ON decisions BEGIN
-                INSERT INTO decisions_fts (rowid, summary, rationale, implementation_details, tags)
-                VALUES (new.id, new.summary, new.rationale, new.implementation_details, new.tags);
-            END;
-        """)
-        cursor.execute("DROP TRIGGER IF EXISTS decisions_ad")
-        cursor.execute("""
-            CREATE TRIGGER decisions_ad AFTER DELETE ON decisions BEGIN
-                DELETE FROM decisions_fts WHERE rowid=old.id;
-            END;
-        """)
-        cursor.execute("DROP TRIGGER IF EXISTS decisions_au")
-        cursor.execute("""
-            CREATE TRIGGER decisions_au AFTER UPDATE ON decisions BEGIN
-                UPDATE decisions_fts SET
-                    summary = new.summary,
-                    rationale = new.rationale,
-                    implementation_details = new.implementation_details,
-                    tags = new.tags
-                WHERE rowid=new.id;
-            END;
-        """)
-
-        # Progress Entries
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS progress_entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TIMESTAMP NOT NULL,
-                status TEXT NOT NULL,
-                description TEXT NOT NULL,
-                parent_id INTEGER,
-                FOREIGN KEY (parent_id) REFERENCES progress_entries(id) ON DELETE SET NULL
-            )
-        """)
-
-        # System Patterns
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS system_patterns (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                description TEXT,
-                tags TEXT -- JSON stringified list of tags
-            )
-        """)
-        try:
-            cursor.execute("ALTER TABLE system_patterns ADD COLUMN tags TEXT")
-        except sqlite3.OperationalError as e:
-            if "duplicate column name: tags" in str(e).lower():
-                pass # Column already exists, ignore
-            else:
-                raise # Re-raise other operational errors
-
-        # Custom Data
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS custom_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                category TEXT NOT NULL,
-                key TEXT NOT NULL,
-                value TEXT NOT NULL, -- Store as JSON string
-                UNIQUE(category, key)
-            )
-        """)
-
-        # General FTS5 table for custom_data
-        # Drop any old glossary-specific triggers first
-        cursor.execute("DROP TRIGGER IF EXISTS custom_data_glossary_ai")
-        cursor.execute("DROP TRIGGER IF EXISTS custom_data_glossary_ad")
-        cursor.execute("DROP TRIGGER IF EXISTS custom_data_glossary_au")
-        cursor.execute("DROP TABLE IF EXISTS custom_data_fts") # Drop to ensure recreation
-        cursor.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS custom_data_fts USING fts5(
-                category,
-                key,
-                value_text, -- Stores the content of custom_data.value for FTS
-                tokenize = 'porter unicode61'
-            )
-        """)
-
-        # Triggers to keep general custom_data_fts synchronized
-        cursor.execute("DROP TRIGGER IF EXISTS custom_data_ai_generic")
-        cursor.execute("""
-            CREATE TRIGGER custom_data_ai_generic
-            AFTER INSERT ON custom_data
-            BEGIN
-                INSERT INTO custom_data_fts (rowid, category, key, value_text)
-                VALUES (new.id, new.category, new.key, new.value); -- new.value is JSON string, FTS will index its text content
-            END;
-        """)
-        cursor.execute("DROP TRIGGER IF EXISTS custom_data_ad_generic")
-        cursor.execute("""
-            CREATE TRIGGER custom_data_ad_generic
-            AFTER DELETE ON custom_data
-            BEGIN
-                DELETE FROM custom_data_fts WHERE rowid=old.id;
-            END;
-        """)
-        cursor.execute("DROP TRIGGER IF EXISTS custom_data_au_generic")
-        cursor.execute("""
-            CREATE TRIGGER custom_data_au_generic
-            AFTER UPDATE ON custom_data
-            BEGIN
-                UPDATE custom_data_fts SET
-                    category = new.category,
-                    key = new.key,
-                    value_text = new.value
-                WHERE rowid=new.id;
-            END;
-        """)
-
-        # Context Links
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS context_links (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                workspace_id TEXT NOT NULL,
-                source_item_type TEXT NOT NULL,
-                source_item_id TEXT NOT NULL,
-                target_item_type TEXT NOT NULL,
-                target_item_id TEXT NOT NULL,
-                relationship_type TEXT NOT NULL,
-                description TEXT
-            )
-        """)
-
-        # Product Context History
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS product_context_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TIMESTAMP NOT NULL,
-                version INTEGER NOT NULL,
-                content TEXT NOT NULL,
-                change_source TEXT
-            )
-        """)
-        # Index on version for faster lookups
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_product_context_history_version ON product_context_history (version)")
-
-        # Active Context History
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS active_context_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TIMESTAMP NOT NULL,
-                version INTEGER NOT NULL,
-                content TEXT NOT NULL,
-                change_source TEXT
-            )
-        """)
-        # Index on version for faster lookups
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_active_context_history_version ON active_context_history (version)")
-
-        conn.commit()
-    except sqlite3.Error as e:
-        conn.rollback()
-        raise DatabaseError(f"Failed to initialize database tables: {e}")
-    finally:
-        cursor.close()
 
 
 # --- Helper functions for history ---
@@ -341,8 +199,9 @@ def _add_context_history_entry(
 def get_product_context(workspace_id: str) -> models.ProductContext:
     """Retrieves the product context."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     try:
+        cursor = conn.cursor()
         cursor.execute("SELECT id, content FROM product_context WHERE id = 1")
         row = cursor.fetchone()
         if row:
@@ -354,13 +213,15 @@ def get_product_context(workspace_id: str) -> models.ProductContext:
     except (sqlite3.Error, json.JSONDecodeError) as e:
         raise DatabaseError(f"Failed to retrieve product context: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def update_product_context(workspace_id: str, update_args: models.UpdateContextArgs) -> None:
     """Updates the product context using either full content or a patch."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     try:
+        cursor = conn.cursor()
         # Fetch current content to log to history
         cursor.execute("SELECT content FROM product_context WHERE id = 1")
         current_row = cursor.fetchone()
@@ -406,12 +267,14 @@ def update_product_context(workspace_id: str, update_args: models.UpdateContextA
         conn.rollback()
         raise DatabaseError(f"Failed to update product_context: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 def get_active_context(workspace_id: str) -> models.ActiveContext:
     """Retrieves the active context."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     try:
+        cursor = conn.cursor()
         cursor.execute("SELECT id, content FROM active_context WHERE id = 1")
         row = cursor.fetchone()
         if row:
@@ -422,13 +285,15 @@ def get_active_context(workspace_id: str) -> models.ActiveContext:
     except (sqlite3.Error, json.JSONDecodeError) as e:
         raise DatabaseError(f"Failed to retrieve active context: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def update_active_context(workspace_id: str, update_args: models.UpdateContextArgs) -> None:
     """Updates the active context using either full content or a patch."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     try:
+        cursor = conn.cursor()
         # Fetch current content to log to history
         cursor.execute("SELECT content FROM active_context WHERE id = 1")
         current_row = cursor.fetchone()
@@ -472,14 +337,15 @@ def update_active_context(workspace_id: str, update_args: models.UpdateContextAr
         conn.rollback()
         raise DatabaseError(f"Failed to update active context: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 # --- Add more CRUD functions for other models (ActiveContext, Decision, etc.) ---
 # Example: log_decision
 def log_decision(workspace_id: str, decision_data: models.Decision) -> models.Decision:
     """Logs a new decision."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     sql = """
         INSERT INTO decisions (timestamp, summary, rationale, implementation_details, tags)
         VALUES (?, ?, ?, ?, ?)
@@ -493,6 +359,8 @@ def log_decision(workspace_id: str, decision_data: models.Decision) -> models.De
         tags_json
     )
     try:
+        cursor = conn.cursor()
+        cursor = conn.cursor()
         cursor.execute(sql, params)
         decision_id = cursor.lastrowid
         conn.commit()
@@ -503,7 +371,8 @@ def log_decision(workspace_id: str, decision_data: models.Decision) -> models.De
         conn.rollback()
         raise DatabaseError(f"Failed to log decision: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def get_decisions(
     workspace_id: str,
@@ -513,7 +382,7 @@ def get_decisions(
 ) -> List[models.Decision]:
     """Retrieves decisions, optionally limited, and filtered by tags."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     
     base_sql = "SELECT id, timestamp, summary, rationale, implementation_details, tags FROM decisions"
     conditions = []
@@ -551,6 +420,7 @@ def get_decisions(
     params_tuple = tuple(params_list)
 
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, params_tuple)
         rows = cursor.fetchall()
         decisions = [
@@ -579,12 +449,13 @@ def get_decisions(
     except (sqlite3.Error, json.JSONDecodeError) as e: # Added JSONDecodeError
         raise DatabaseError(f"Failed to retrieve decisions: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def search_decisions_fts(workspace_id: str, query_term: str, limit: Optional[int] = 10) -> List[models.Decision]:
     """Searches decisions using FTS5 for the given query term."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     # The MATCH operator is used for FTS queries.
     # We join back to the original 'decisions' table to get all columns.
     # 'rank' is an FTS5 auxiliary function that indicates relevance.
@@ -601,6 +472,7 @@ def search_decisions_fts(workspace_id: str, query_term: str, limit: Optional[int
         params_list.append(limit)
 
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, tuple(params_list))
         rows = cursor.fetchall()
         decisions_found = [
@@ -617,14 +489,16 @@ def search_decisions_fts(workspace_id: str, query_term: str, limit: Optional[int
     except sqlite3.Error as e:
         raise DatabaseError(f"Failed FTS search on decisions for term '{query_term}': {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def delete_decision_by_id(workspace_id: str, decision_id: int) -> bool:
     """Deletes a decision by its ID. Returns True if deleted, False otherwise."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     sql = "DELETE FROM decisions WHERE id = ?"
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, (decision_id,))
         # The FTS table 'decisions_fts' should be updated automatically by its AFTER DELETE trigger.
         conn.commit()
@@ -633,12 +507,13 @@ def delete_decision_by_id(workspace_id: str, decision_id: int) -> bool:
         conn.rollback()
         raise DatabaseError(f"Failed to delete decision with ID {decision_id}: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def log_progress(workspace_id: str, progress_data: models.ProgressEntry) -> models.ProgressEntry:
     """Logs a new progress entry."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     sql = """
         INSERT INTO progress_entries (timestamp, status, description, parent_id)
         VALUES (?, ?, ?, ?)
@@ -650,6 +525,7 @@ def log_progress(workspace_id: str, progress_data: models.ProgressEntry) -> mode
         progress_data.parent_id
     )
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, params)
         progress_id = cursor.lastrowid
         conn.commit()
@@ -660,7 +536,8 @@ def log_progress(workspace_id: str, progress_data: models.ProgressEntry) -> mode
         # Consider checking for foreign key constraint errors if parent_id is invalid
         raise DatabaseError(f"Failed to log progress entry: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 def get_progress(
     workspace_id: str,
     status_filter: Optional[str] = None,
@@ -669,7 +546,7 @@ def get_progress(
 ) -> List[models.ProgressEntry]:
     """Retrieves progress entries, optionally filtered and limited."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     sql = "SELECT id, timestamp, status, description, parent_id FROM progress_entries"
     conditions = []
     params_list = []
@@ -694,6 +571,7 @@ def get_progress(
     params = tuple(params_list)
 
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, params)
         rows = cursor.fetchall()
         progress_entries = [
@@ -710,7 +588,8 @@ def get_progress(
     except sqlite3.Error as e:
         raise DatabaseError(f"Failed to retrieve progress entries: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def update_progress_entry(workspace_id: str, update_args: models.UpdateProgressArgs) -> bool:
     """
@@ -718,7 +597,7 @@ def update_progress_entry(workspace_id: str, update_args: models.UpdateProgressA
     Returns True if the entry was found and updated, False otherwise.
     """
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     
     sql = "UPDATE progress_entries SET"
     updates = []
@@ -749,6 +628,7 @@ def update_progress_entry(workspace_id: str, update_args: models.UpdateProgressA
     params = tuple(params_list)
 
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, params)
         conn.commit()
         return cursor.rowcount > 0 # Return True if one row was updated
@@ -756,7 +636,8 @@ def update_progress_entry(workspace_id: str, update_args: models.UpdateProgressA
         conn.rollback()
         raise DatabaseError(f"Failed to update progress entry with ID {update_args.progress_id}: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def delete_progress_entry_by_id(workspace_id: str, progress_id: int) -> bool:
     """
@@ -765,9 +646,10 @@ def delete_progress_entry_by_id(workspace_id: str, progress_id: int) -> bool:
     Returns True if deleted, False otherwise.
     """
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     sql = "DELETE FROM progress_entries WHERE id = ?"
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, (progress_id,))
         conn.commit()
         return cursor.rowcount > 0 # Return True if one row was deleted
@@ -775,24 +657,27 @@ def delete_progress_entry_by_id(workspace_id: str, progress_id: int) -> bool:
         conn.rollback()
         raise DatabaseError(f"Failed to delete progress entry with ID {progress_id}: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 def log_system_pattern(workspace_id: str, pattern_data: models.SystemPattern) -> models.SystemPattern:
     """Logs or updates a system pattern. Uses INSERT OR REPLACE based on unique name."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     # Use INSERT OR REPLACE to handle unique constraint on 'name'
     # This will overwrite the description and tags if the name already exists.
     sql = """
-        INSERT OR REPLACE INTO system_patterns (name, description, tags)
-        VALUES (?, ?, ?)
+        INSERT OR REPLACE INTO system_patterns (timestamp, name, description, tags)
+        VALUES (?, ?, ?, ?)
     """
     tags_json = json.dumps(pattern_data.tags) if pattern_data.tags is not None else None
     params = (
+        pattern_data.timestamp,
         pattern_data.name,
         pattern_data.description,
         tags_json
     )
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, params)
         # We might not get the correct lastrowid if it replaced,
         # so we need to query back to get the ID if needed.
@@ -809,7 +694,8 @@ def log_system_pattern(workspace_id: str, pattern_data: models.SystemPattern) ->
         conn.rollback()
         raise DatabaseError(f"Failed to log system pattern '{pattern_data.name}': {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def get_system_patterns(
     workspace_id: str,
@@ -819,9 +705,9 @@ def get_system_patterns(
 ) -> List[models.SystemPattern]:
     """Retrieves system patterns, optionally filtered by tags."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     
-    base_sql = "SELECT id, name, description, tags FROM system_patterns"
+    base_sql = "SELECT id, timestamp, name, description, tags FROM system_patterns"
     order_by_clause = " ORDER BY name ASC"
     # params_list: List[Any] = [] # Not used for SQL filtering of tags for now
     # limit_clause = ""
@@ -833,11 +719,13 @@ def get_system_patterns(
     # params_tuple = tuple(params_list)
 
     try:
+        cursor = conn.cursor()
         cursor.execute(sql) #, params_tuple)
         rows = cursor.fetchall()
         patterns = [
             models.SystemPattern(
                 id=row['id'],
+                timestamp=row['timestamp'],
                 name=row['name'],
                 description=row['description'],
                 tags=json.loads(row['tags']) if row['tags'] else None
@@ -859,15 +747,17 @@ def get_system_patterns(
     except (sqlite3.Error, json.JSONDecodeError) as e: # Added JSONDecodeError
         raise DatabaseError(f"Failed to retrieve system patterns: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def delete_system_pattern_by_id(workspace_id: str, pattern_id: int) -> bool:
     """Deletes a system pattern by its ID. Returns True if deleted, False otherwise."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     sql = "DELETE FROM system_patterns WHERE id = ?"
     # Note: System patterns do not currently have an FTS table, so no trigger concerns here.
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, (pattern_id,))
         conn.commit()
         return cursor.rowcount > 0
@@ -875,20 +765,23 @@ def delete_system_pattern_by_id(workspace_id: str, pattern_id: int) -> bool:
         conn.rollback()
         raise DatabaseError(f"Failed to delete system pattern with ID {pattern_id}: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def log_custom_data(workspace_id: str, data: models.CustomData) -> models.CustomData:
     """Logs or updates a custom data entry. Uses INSERT OR REPLACE based on unique (category, key)."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     sql = """
-        INSERT OR REPLACE INTO custom_data (category, key, value)
-        VALUES (?, ?, ?)
+        INSERT OR REPLACE INTO custom_data (timestamp, category, key, value)
+        VALUES (?, ?, ?, ?)
     """
     try:
+        cursor = conn.cursor()
         # Ensure value is serialized to JSON string
         value_json = json.dumps(data.value)
         params = (
+            data.timestamp,
             data.category,
             data.key,
             value_json
@@ -905,7 +798,8 @@ def log_custom_data(workspace_id: str, data: models.CustomData) -> models.Custom
         conn.rollback()
         raise DatabaseError(f"Failed to log custom data for '{data.category}/{data.key}': {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def get_custom_data(
     workspace_id: str,
@@ -917,8 +811,8 @@ def get_custom_data(
         raise ValueError("Cannot filter by key without specifying a category.")
 
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
-    sql = "SELECT id, category, key, value FROM custom_data"
+    cursor = None # Initialize cursor for finally block
+    sql = "SELECT id, timestamp, category, key, value FROM custom_data"
     conditions = []
     params_list = []
 
@@ -936,6 +830,7 @@ def get_custom_data(
     params = tuple(params_list)
 
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, params)
         rows = cursor.fetchall()
         custom_data_list = []
@@ -946,6 +841,7 @@ def get_custom_data(
                 custom_data_list.append(
                     models.CustomData(
                         id=row['id'],
+                        timestamp=row['timestamp'],
                         category=row['category'],
                         key=row['key'],
                         value=value_data
@@ -959,15 +855,18 @@ def get_custom_data(
     except sqlite3.Error as e:
         raise DatabaseError(f"Failed to retrieve custom data: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def delete_custom_data(workspace_id: str, category: str, key: str) -> bool:
     """Deletes a specific custom data entry by category and key. Returns True if deleted, False otherwise."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     sql = "DELETE FROM custom_data WHERE category = ? AND key = ?"
     params = (category, key)
     try:
+        cursor = conn.cursor()
+        cursor = conn.cursor()
         cursor.execute(sql, params)
         conn.commit()
         return cursor.rowcount > 0 # Return True if one row was deleted
@@ -975,12 +874,13 @@ def delete_custom_data(workspace_id: str, category: str, key: str) -> bool:
         conn.rollback()
         raise DatabaseError(f"Failed to delete custom data for '{category}/{key}': {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def log_context_link(workspace_id: str, link_data: models.ContextLink) -> models.ContextLink:
     """Logs a new context link."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     sql = """
         INSERT INTO context_links (
             workspace_id, source_item_type, source_item_id,
@@ -1002,6 +902,7 @@ def log_context_link(workspace_id: str, link_data: models.ContextLink) -> models
         link_data.timestamp # Pydantic model ensures this is set
     )
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, params)
         link_id = cursor.lastrowid
         conn.commit()
@@ -1013,7 +914,8 @@ def log_context_link(workspace_id: str, link_data: models.ContextLink) -> models
         conn.rollback()
         raise DatabaseError(f"Failed to log context link: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def get_context_links(
     workspace_id: str,
@@ -1028,7 +930,7 @@ def get_context_links(
     Finds links where the given item is EITHER the source OR the target.
     """
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     
     # Ensure item_id is treated as string for consistent querying with TEXT columns
     str_item_id = str(item_id)
@@ -1097,12 +999,13 @@ def get_context_links(
     except sqlite3.Error as e:
         raise DatabaseError(f"Failed to retrieve context links: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def search_project_glossary_fts(workspace_id: str, query_term: str, limit: Optional[int] = 10) -> List[models.CustomData]:
     """Searches ProjectGlossary entries in custom_data using FTS5."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     # Updated to use the new general custom_data_fts table structure
     sql = """
         SELECT cd.id, cd.category, cd.key, cd.value
@@ -1121,6 +1024,7 @@ def search_project_glossary_fts(workspace_id: str, query_term: str, limit: Optio
         params_list.append(limit)
 
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, tuple(params_list))
         rows = cursor.fetchall()
         glossary_entries = []
@@ -1143,7 +1047,8 @@ def search_project_glossary_fts(workspace_id: str, query_term: str, limit: Optio
     except sqlite3.Error as e:
         raise DatabaseError(f"Failed FTS search on ProjectGlossary for term '{query_term}': {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def search_custom_data_value_fts(
     workspace_id: str,
@@ -1154,10 +1059,10 @@ def search_custom_data_value_fts(
     """Searches all custom_data entries using FTS5 on category, key, and value.
        Optionally filters by category after FTS."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     
     sql = """
-        SELECT cd.id, cd.category, cd.key, cd.value
+        SELECT cd.id, cd.timestamp, cd.category, cd.key, cd.value
         FROM custom_data_fts fts
         JOIN custom_data cd ON fts.rowid = cd.id
         WHERE fts.custom_data_fts MATCH ?
@@ -1175,15 +1080,18 @@ def search_custom_data_value_fts(
         params_list.append(limit)
 
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, tuple(params_list))
         rows = cursor.fetchall()
         results = []
         for row in rows:
             try:
+                cursor = conn.cursor()
                 value_data = json.loads(row['value'])
                 results.append(
                     models.CustomData(
                         id=row['id'],
+                        timestamp=row['timestamp'],
                         category=row['category'],
                         key=row['key'],
                         value=value_data
@@ -1196,7 +1104,8 @@ def search_custom_data_value_fts(
     except sqlite3.Error as e:
         raise DatabaseError(f"Failed FTS search on custom_data for term '{query_term}': {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def get_item_history(
     workspace_id: str,
@@ -1204,7 +1113,7 @@ def get_item_history(
 ) -> List[Dict[str, Any]]: # Returning list of dicts for now, could be Pydantic models
     """Retrieves history for product_context or active_context."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
 
     if args.item_type == "product_context":
         history_table_name = "product_context_history"
@@ -1264,7 +1173,8 @@ def get_item_history(
     except (sqlite3.Error, json.JSONDecodeError) as e:
         raise DatabaseError(f"Failed to retrieve history for {args.item_type}: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 # --- Recent Activity Summary ---
 
@@ -1278,13 +1188,14 @@ limit_per_type: int = 5
     Retrieves a summary of recent activity across various ConPort items.
     """
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
+    cursor = None # Initialize cursor for finally block
     summary_results: Dict[str, Any] = {
         "recent_decisions": [],
         "recent_progress_entries": [],
         "recent_product_context_updates": [],
         "recent_active_context_updates": [],
         "recent_links_created": [],
+        "recent_system_patterns": [], # Added for System Patterns
         "notes": []
     }
 
@@ -1301,6 +1212,7 @@ limit_per_type: int = 5
     summary_results["summary_period_start"] = start_datetime.isoformat()
 
     try:
+        cursor = conn.cursor()
         # Recent Decisions
         cursor.execute(
             """
@@ -1384,18 +1296,35 @@ limit_per_type: int = 5
             ).model_dump(mode='json') for row in rows
         ]
 
-        # Note about missing timestamps
-        summary_results["notes"].append(
-            "System Patterns and general Custom Data entries are not included in this summary "
-            "as they currently do not have creation/update timestamps in the database."
+        # Recent System Patterns
+        cursor.execute(
+            """
+            SELECT id, timestamp, name, description, tags
+            FROM system_patterns WHERE timestamp >= ? ORDER BY timestamp DESC LIMIT ?
+            """,
+            (start_datetime, limit_per_type)
         )
+        rows = cursor.fetchall()
+        summary_results["recent_system_patterns"] = [
+            models.SystemPattern(
+                id=row['id'], timestamp=row['timestamp'], name=row['name'],
+                description=row['description'], tags=json.loads(row['tags']) if row['tags'] else None
+            ).model_dump(mode='json') for row in rows
+        ]
+
+        # Note about missing timestamps (removed as all now have timestamps)
+        # summary_results["notes"].append(
+        #     "General Custom Data entries are not included in this summary "
+        #     "as they currently do not have creation/update timestamps in the database."
+        # )
 
         return summary_results
 
     except (sqlite3.Error, json.JSONDecodeError) as e:
         raise DatabaseError(f"Failed to retrieve recent activity summary: {e}")
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 # (All planned CRUD functions implemented)
 

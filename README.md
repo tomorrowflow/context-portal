@@ -1,6 +1,6 @@
 <div align="center">
 
-**⚠️ Please see [v0.2.3_UPDATE_GUIDE.md](https://github.com/GreatScottyMac/context-portal/blob/main/v0.2.3_UPDATE_GUIDE.md) if updating from a previous version of Context Portal MCP ⚠️**
+**⚠️ Please see [v0.2.4_UPDATE_GUIDE.md](https://github.com/GreatScottyMac/context-portal/blob/main/v0.2.4_UPDATE_GUIDE.md) if updating from a previous version of Context Portal MCP ⚠️**
 
 <br>
 
@@ -359,7 +359,7 @@ When you launch the ConPort server, particularly in STDIO mode (`--mode stdio`),
 
 <br>
 
-For pre-upgrade cleanup, including clearing Python bytecode cache, please refer to the [v0.2.3_UPDATE_GUIDE.md](v0.2.3_UPDATE_GUIDE.md#1-pre-upgrade-cleanup).
+For pre-upgrade cleanup, including clearing Python bytecode cache, please refer to the [v0.2.4_UPDATE_GUIDE.md](v0.2.4_UPDATE_GUIDE.md#1-pre-upgrade-cleanup).
 
 **Where to run these commands:**
 
@@ -513,7 +513,7 @@ The ConPort server exposes the following tools via MCP, allowing interaction wit
 
 ConPort can be used to provide structured context (including **vector data** for semantic search) that AI assistants can leverage for **prompt caching** with compatible LLM providers (like Google Gemini, Anthropic Claude, and OpenAI). Prompt caching reduces token costs and latency by reusing frequently used parts of prompts.
 
-This repository includes a detailed strategy file (`context_portal/prompt_caching_strategy.yml`) that defines how an LLM assistant should identify cacheable content from ConPort and structure prompts for different providers.
+This repository includes a detailed strategy file (`conport-custom-instructions/prompt_caching_strategy.yml`) that defines how an LLM assistant should identify cacheable content from ConPort and structure prompts for different providers.
 
 **Key aspects of the strategy include:**
 
@@ -534,12 +534,12 @@ For a more in-depth understanding of ConPort's design, architecture, and advance
 
 ## Contributing
 
-Details on contributing to the ConPort project will be added here in the future.
+Please see our [CONTRIBUTING.md](CONTRIBUTING.md) guide for details on how to contribute to the ConPort project.
 ## License
  This project is licensed under the [Apache-2.0 license](LICENSE).
   
  
 ## Database Migration & Update Guide
  
-For detailed instructions on how to manage your `context.db` file, especially when updating ConPort across versions that include database schema changes, please refer to the dedicated [v0.2.3_UPDATE_GUIDE.md](v0.2.3_UPDATE_GUIDE.md). This guide provides steps for manual data migration (export/import) if needed, and troubleshooting tips.
+For detailed instructions on how to manage your `context.db` file, especially when updating ConPort across versions that include database schema changes, please refer to the dedicated [v0.2.4_UPDATE_GUIDE.md](v0.2.4_UPDATE_GUIDE.md). This guide provides steps for manual data migration (export/import) if needed, and troubleshooting tips.
 

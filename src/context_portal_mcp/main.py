@@ -4,7 +4,8 @@ from fastapi import FastAPI
 import logging.handlers
 import argparse
 import os
-from typing import Dict, Any, Optional, AsyncIterator, List, Annotated # Added AsyncIterator and List and Annotated
+from typing import Dict, Any, Optional, AsyncIterator, List, Annotated
+from pathlib import Path # Added Path for robust path handling
 from datetime import datetime
 from contextlib import asynccontextmanager # Added
 
@@ -16,6 +17,7 @@ from pydantic import Field
 try:
     from .handlers import mcp_handlers # We will adapt these
     from .db import database, models # models for tool argument types
+    from .db.database import ensure_alembic_files_exist # Import the provisioning function
     from .core import exceptions # For custom exceptions if FastMCP doesn't map them
 except ImportError:
     import os
@@ -51,7 +53,7 @@ async def conport_lifespan(server: FastMCP) -> AsyncIterator[None]:
 
 # --- FastMCP Server Instance ---
 # Version from pyproject.toml would be ideal here, or define centrally
-CONPORT_VERSION = "0.1.0"
+CONPORT_VERSION = "0.2.4" # Updated to match current release
 
 conport_mcp = FastMCP(
     name="ConPort", # Pass name directly
@@ -757,7 +759,7 @@ async def read_root():
 
 # Determine the absolute path to the root of the ConPort server project
 # Assumes this script (main.py) is at src/context_portal_mcp/main.py
-CONPORT_SERVER_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+CONPORT_SERVER_ROOT_DIR = Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')))
 log.info(f"ConPort Server Root Directory identified as: {CONPORT_SERVER_ROOT_DIR}")
 def main_logic(sys_args=None):
     """
@@ -856,6 +858,8 @@ def main_logic(sys_args=None):
 
         try:
             # from src.context_portal_mcp.core.config import get_database_path # Import happens at module level
+            # Call the provisioning function at server startup
+            ensure_alembic_files_exist(Path(effective_workspace_id))
             # get_database_path(effective_workspace_id) # EARLY VALIDATION REMOVED - Path validation and dir creation will occur on first DB access.
 
             if not effective_workspace_id or not os.path.isdir(effective_workspace_id): # Basic check if path is a directory

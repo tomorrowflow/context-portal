@@ -748,8 +748,10 @@ def _format_progress_md(progress_entries: List[models.ProgressEntry]) -> str:
 
 def _format_system_patterns_md(patterns: List[models.SystemPattern]) -> str:
     lines = ["# System Patterns\n"]
-    for pattern in sorted(patterns, key=lambda x: x.name):
-        lines.append(f"\n## {pattern.name}\n")
+    for pattern in sorted(patterns, key=lambda x: x.timestamp, reverse=True): # Sort by timestamp
+        lines.append("\n---\n")
+        lines.append(f"## {pattern.name}\n")
+        lines.append(f"*   [{pattern.timestamp.strftime('%Y-%m-%d %H:%M:%S')}]\n") # Add timestamp
         if pattern.description:
             lines.append(f"{pattern.description}\n")
     return "".join(lines)
@@ -808,9 +810,9 @@ def handle_export_conport_to_markdown(args: models.ExportConportToMarkdownArgs) 
             for item in custom_data_entries:
                 if item.category not in categories:
                     categories[item.category] = []
-                
                 value_str = json.dumps(item.value, indent=2) if not isinstance(item.value, str) else item.value
-                categories[item.category].append(f"### {item.key}\n\n```json\n{value_str}\n```\n")
+                categories[item.category].append(f"### {item.key}\n\n*   [{item.timestamp.strftime('%Y-%m-%d %H:%M:%S')}]\n\n```json\n{value_str}\n```\n")
+            
             
             for category_name_from_loop, items_md in categories.items(): # Renamed category to avoid clash
                 cat_file_name = "".join(c if c.isalnum() else "_" for c in category_name_from_loop) + ".md"

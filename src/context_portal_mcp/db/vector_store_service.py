@@ -135,11 +135,16 @@ def upsert_item_embedding(
     collection = get_or_create_collection(workspace_id, collection_name)
     doc_id = f"{item_type}_{item_id}"
     
-    # Ensure metadata is suitable for ChromaDB (basic types)
-    # Pydantic models for metadata internally would be good.
-    # For now, assume metadata is prepared by caller.
+    # Ensure metadata is suitable for ChromaDB (str, int, float, bool, or None)
+    # Convert any list values to strings.
+    final_metadata = {}
+    for key, value in metadata.items():
+        if isinstance(value, list):
+            final_metadata[key] = ", ".join(map(str, value))
+        else:
+            final_metadata[key] = value
+    
     # Add item_type and item_id to metadata if not already present, for easier filtering.
-    final_metadata = metadata.copy()
     final_metadata['conport_item_type'] = item_type
     final_metadata['conport_item_id'] = str(item_id)
 
