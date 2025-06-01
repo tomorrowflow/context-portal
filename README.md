@@ -1,5 +1,7 @@
 <div align="center">
 
+**⚠️ Currently working out the correct client config for the Docker version ⚠️**
+
 **⚠️ Please see [v0.2.4_UPDATE_GUIDE.md](https://github.com/GreatScottyMac/context-portal/blob/main/v0.2.4_UPDATE_GUIDE.md) if updating from a previous version of Context Portal MCP ⚠️**
 
 <br>
