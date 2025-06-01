@@ -5,13 +5,17 @@ import logging.handlers
 import argparse
 import os
 from typing import Dict, Any, Optional, AsyncIterator, List, Annotated
-from pathlib import Path # Added Path for robust path handling
+from pathlib import Path
 from datetime import datetime
-from contextlib import asynccontextmanager # Added
+from contextlib import asynccontextmanager
 
-# MCP SDK imports
-from mcp.server.fastmcp import FastMCP, Context as MCPContext # Renamed Context to avoid clash
+# FastMCP imports (corrected)
+from fastmcp import FastMCP
 from pydantic import Field
+from fastmcp import Context
+
+# Initialize FastMCP server
+mcp = FastMCP("Context Portal MCP Server")
 
 # Local imports
 try:
@@ -71,7 +75,7 @@ app = FastAPI(title="ConPort MCP Server Wrapper", version=CONPORT_VERSION)
 @conport_mcp.tool(name="get_product_context", description="Retrieves the overall project goals, features, and architecture.")
 async def tool_get_product_context(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext
+    ctx: Context
 ) -> Dict[str, Any]:
     try:
         # Construct the Pydantic model for the handler
@@ -87,7 +91,7 @@ async def tool_get_product_context(
 @conport_mcp.tool(name="update_product_context", description="Updates the product context. Accepts full `content` (object) or `patch_content` (object) for partial updates (use `__DELETE__` as a value in patch to remove a key).")
 async def tool_update_product_context(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext, # MCPContext should typically be last, but let's keep other args grouped
+    ctx: Context, # MCPContext should typically be last, but let's keep other args grouped
     content: Annotated[Optional[Dict[str, Any]], Field(description="The full new context content as a dictionary. Overwrites existing.")] = None,
     patch_content: Annotated[Optional[Dict[str, Any]], Field(description="A dictionary of changes to apply to the existing context (add/update keys).")] = None
 ) -> Dict[str, Any]:
@@ -114,7 +118,7 @@ async def tool_update_product_context(
 @conport_mcp.tool(name="get_active_context", description="Retrieves the current working focus, recent changes, and open issues.")
 async def tool_get_active_context(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext
+    ctx: Context
 ) -> Dict[str, Any]:
     try:
         pydantic_args = models.GetContextArgs(workspace_id=workspace_id)
@@ -129,7 +133,7 @@ async def tool_get_active_context(
 @conport_mcp.tool(name="update_active_context", description="Updates the active context. Accepts full `content` (object) or `patch_content` (object) for partial updates (use `__DELETE__` as a value in patch to remove a key).")
 async def tool_update_active_context(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext,
+    ctx: Context,
     content: Annotated[Optional[Dict[str, Any]], Field(description="The full new context content as a dictionary. Overwrites existing.")] = None,
     patch_content: Annotated[Optional[Dict[str, Any]], Field(description="A dictionary of changes to apply to the existing context (add/update keys).")] = None
 ) -> Dict[str, Any]:
@@ -154,7 +158,7 @@ async def tool_update_active_context(
 async def tool_log_decision(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     summary: Annotated[str, Field(min_length=1, description="A concise summary of the decision")],
-    ctx: MCPContext,
+    ctx: Context,
     rationale: Annotated[Optional[str], Field(description="The reasoning behind the decision")] = None,
     implementation_details: Annotated[Optional[str], Field(description="Details about how the decision will be/was implemented")] = None,
     tags: Annotated[Optional[List[str]], Field(description="Optional tags for categorization")] = None
@@ -178,7 +182,7 @@ async def tool_log_decision(
 @conport_mcp.tool(name="get_decisions", description="Retrieves logged decisions.")
 async def tool_get_decisions(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext,
+    ctx: Context,
     limit: Annotated[Optional[int], Field(gt=0, description="Maximum number of decisions to return (most recent first)")] = None,
     tags_filter_include_all: Annotated[Optional[List[str]], Field(description="Filter: items must include ALL of these tags.")] = None,
     tags_filter_include_any: Annotated[Optional[List[str]], Field(description="Filter: items must include AT LEAST ONE of these tags.")] = None
@@ -206,7 +210,7 @@ async def tool_get_decisions(
 async def tool_search_decisions_fts(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     query_term: Annotated[str, Field(min_length=1, description="The term to search for in decisions.")],
-    ctx: MCPContext,
+    ctx: Context,
     limit: Annotated[Optional[int], Field(default=10, gt=0, description="Maximum number of search results to return.")] = 10
 ) -> List[Dict[str, Any]]:
     try:
@@ -228,7 +232,7 @@ async def tool_log_progress(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     status: Annotated[str, Field(description="Current status (e.g., 'TODO', 'IN_PROGRESS', 'DONE')")],
     description: Annotated[str, Field(min_length=1, description="Description of the progress or task")],
-    ctx: MCPContext,
+    ctx: Context,
     parent_id: Annotated[Optional[int], Field(description="ID of the parent task, if this is a subtask")] = None,
     linked_item_type: Annotated[Optional[str], Field(description="Optional: Type of the ConPort item this progress entry is linked to (e.g., 'decision', 'system_pattern')")] = None,
     linked_item_id: Annotated[Optional[str], Field(description="Optional: ID/key of the ConPort item this progress entry is linked to (requires linked_item_type)")] = None,
@@ -259,7 +263,7 @@ async def tool_log_progress(
 @conport_mcp.tool(name="get_progress", description="Retrieves progress entries.")
 async def tool_get_progress(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext,
+    ctx: Context,
     status_filter: Annotated[Optional[str], Field(description="Filter entries by status")] = None,
     parent_id_filter: Annotated[Optional[int], Field(description="Filter entries by parent task ID")] = None,
     limit: Annotated[Optional[int], Field(gt=0, description="Maximum number of entries to return (most recent first)")] = None
@@ -283,7 +287,7 @@ async def tool_get_progress(
 async def tool_update_progress(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     progress_id: Annotated[int, Field(gt=0, description="The ID of the progress entry to update.")],
-    ctx: MCPContext,
+    ctx: Context,
     status: Annotated[Optional[str], Field(description="New status (e.g., 'TODO', 'IN_PROGRESS', 'DONE')")] = None,
     description: Annotated[Optional[str], Field(min_length=1, description="New description of the progress or task")] = None,
     parent_id: Annotated[Optional[int], Field(description="New ID of the parent task, if changing")] = None
@@ -316,7 +320,7 @@ async def tool_update_progress(
 async def tool_delete_progress_by_id(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     progress_id: Annotated[int, Field(gt=0, description="The ID of the progress entry to delete.")],
-    ctx: MCPContext
+    ctx: Context
 ) -> Dict[str, Any]:
     """
     MCP tool wrapper for delete_progress_by_id.
@@ -340,7 +344,7 @@ async def tool_delete_progress_by_id(
 async def tool_log_system_pattern(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     name: Annotated[str, Field(min_length=1, description="Unique name for the system pattern")],
-    ctx: MCPContext,
+    ctx: Context,
     description: Annotated[Optional[str], Field(description="Description of the pattern")] = None,
     tags: Annotated[Optional[List[str]], Field(description="Optional tags for categorization")] = None
 ) -> Dict[str, Any]:
@@ -362,7 +366,7 @@ async def tool_log_system_pattern(
 @conport_mcp.tool(name="get_system_patterns", description="Retrieves system patterns.")
 async def tool_get_system_patterns(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext,
+    ctx: Context,
     tags_filter_include_all: Annotated[Optional[List[str]], Field(description="Filter: items must include ALL of these tags.")] = None,
     tags_filter_include_any: Annotated[Optional[List[str]], Field(description="Filter: items must include AT LEAST ONE of these tags.")] = None
 ) -> List[Dict[str, Any]]:
@@ -390,7 +394,7 @@ async def tool_log_custom_data(
     category: Annotated[str, Field(min_length=1, description="Category for the custom data")],
     key: Annotated[str, Field(min_length=1, description="Key for the custom data (unique within category)")],
     value: Annotated[Any, Field(description="The custom data value (JSON serializable)")],
-    ctx: MCPContext
+    ctx: Context
 ) -> Dict[str, Any]:
     try:
         pydantic_args = models.LogCustomDataArgs(
@@ -410,7 +414,7 @@ async def tool_log_custom_data(
 @conport_mcp.tool(name="get_custom_data", description="Retrieves custom data.")
 async def tool_get_custom_data(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext,
+    ctx: Context,
     category: Annotated[Optional[str], Field(description="Filter by category")] = None,
     key: Annotated[Optional[str], Field(description="Filter by key (requires category)")] = None
 ) -> List[Dict[str, Any]]:
@@ -433,7 +437,7 @@ async def tool_delete_custom_data(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     category: Annotated[str, Field(min_length=1, description="Category of the data to delete")],
     key: Annotated[str, Field(min_length=1, description="Key of the data to delete")],
-    ctx: MCPContext
+    ctx: Context
 ) -> Dict[str, Any]:
     try:
         pydantic_args = models.DeleteCustomDataArgs(
@@ -452,7 +456,7 @@ async def tool_delete_custom_data(
 async def tool_search_project_glossary_fts(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     query_term: Annotated[str, Field(min_length=1, description="The term to search for in the glossary.")],
-    ctx: MCPContext,
+    ctx: Context,
     limit: Annotated[Optional[int], Field(default=10, gt=0, description="Maximum number of search results to return.")] = 10
 ) -> List[Dict[str, Any]]:
     try:
@@ -472,7 +476,7 @@ async def tool_search_project_glossary_fts(
 @conport_mcp.tool(name="export_conport_to_markdown", description="Exports ConPort data to markdown files.")
 async def tool_export_conport_to_markdown(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext,
+    ctx: Context,
     output_path: Annotated[Optional[str], Field(description="Optional output directory path relative to workspace_id. Defaults to './conport_export/' if not provided.")] = None
 ) -> Dict[str, Any]:
     try:
@@ -491,7 +495,7 @@ async def tool_export_conport_to_markdown(
 @conport_mcp.tool(name="import_markdown_to_conport", description="Imports data from markdown files into ConPort.")
 async def tool_import_markdown_to_conport(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext,
+    ctx: Context,
     input_path: Annotated[Optional[str], Field(description="Optional input directory path relative to workspace_id containing markdown files. Defaults to './conport_export/' if not provided.")] = None
 ) -> Dict[str, Any]:
     try:
@@ -515,7 +519,7 @@ async def tool_link_conport_items(
     target_item_type: Annotated[str, Field(description="Type of the target item")],
     target_item_id: Annotated[str, Field(description="ID or key of the target item")],
     relationship_type: Annotated[str, Field(description="Nature of the link")],
-    ctx: MCPContext,
+    ctx: Context,
     description: Annotated[Optional[str], Field(description="Optional description for the link")] = None
 ) -> Dict[str, Any]:
     try:
@@ -541,7 +545,7 @@ async def tool_get_linked_items(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     item_type: Annotated[str, Field(description="Type of the item to find links for (e.g., 'decision')")],
     item_id: Annotated[str, Field(description="ID or key of the item to find links for")],
-    ctx: MCPContext,
+    ctx: Context,
     relationship_type_filter: Annotated[Optional[str], Field(description="Optional: Filter by relationship type")] = None,
     linked_item_type_filter: Annotated[Optional[str], Field(description="Optional: Filter by the type of the linked items")] = None,
     limit: Annotated[Optional[int], Field(gt=0, description="Maximum number of links to return")] = None
@@ -567,7 +571,7 @@ async def tool_get_linked_items(
 async def tool_search_custom_data_value_fts(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     query_term: Annotated[str, Field(min_length=1, description="The term to search for in custom data (category, key, or value).")],
-    ctx: MCPContext,
+    ctx: Context,
     category_filter: Annotated[Optional[str], Field(description="Optional: Filter results to this category after FTS.")] = None,
     limit: Annotated[Optional[int], Field(default=10, gt=0, description="Maximum number of search results to return.")] = 10
 ) -> List[Dict[str, Any]]:
@@ -591,7 +595,7 @@ async def tool_batch_log_items(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     item_type: Annotated[str, Field(description="Type of items to log (e.g., 'decision', 'progress_entry', 'system_pattern', 'custom_data')")],
     items: Annotated[List[Dict[str, Any]], Field(description="A list of dictionaries, each representing the arguments for a single item log.")],
-    ctx: MCPContext
+    ctx: Context
 ) -> Dict[str, Any]:
     try:
         # Basic validation for items being a list is handled by Pydantic/FastMCP.
@@ -613,7 +617,7 @@ async def tool_batch_log_items(
 async def tool_get_item_history(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     item_type: Annotated[str, Field(description="Type of the item: 'product_context' or 'active_context'")],
-    ctx: MCPContext,
+    ctx: Context,
     limit: Annotated[Optional[int], Field(gt=0, description="Maximum number of history entries to return (most recent first)")] = None,
     before_timestamp: Annotated[Optional[datetime], Field(description="Return entries before this timestamp")] = None,
     after_timestamp: Annotated[Optional[datetime], Field(description="Return entries after this timestamp")] = None,
@@ -644,7 +648,7 @@ async def tool_get_item_history(
 async def tool_delete_decision_by_id(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     decision_id: Annotated[int, Field(gt=0, description="The ID of the decision to delete.")],
-    ctx: MCPContext
+    ctx: Context
 ) -> Dict[str, Any]:
     try:
         pydantic_args = models.DeleteDecisionByIdArgs(workspace_id=workspace_id, decision_id=decision_id)
@@ -657,7 +661,7 @@ async def tool_delete_decision_by_id(
 async def tool_delete_system_pattern_by_id(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     pattern_id: Annotated[int, Field(gt=0, description="The ID of the system pattern to delete.")],
-    ctx: MCPContext
+    ctx: Context
 ) -> Dict[str, Any]:
     try:
         pydantic_args = models.DeleteSystemPatternByIdArgs(workspace_id=workspace_id, pattern_id=pattern_id)
@@ -669,7 +673,7 @@ async def tool_delete_system_pattern_by_id(
 @conport_mcp.tool(name="get_conport_schema", description="Retrieves the schema of available ConPort tools and their arguments.")
 async def tool_get_conport_schema(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext
+    ctx: Context
 ) -> Dict[str, Dict[str, Any]]:
     try:
         pydantic_args = models.GetConportSchemaArgs(workspace_id=workspace_id)
@@ -684,7 +688,7 @@ async def tool_get_conport_schema(
 @conport_mcp.tool(name="get_recent_activity_summary", description="Provides a summary of recent ConPort activity (new/updated items).")
 async def tool_get_recent_activity_summary(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
-    ctx: MCPContext,
+    ctx: Context,
     hours_ago: Annotated[Optional[int], Field(gt=0, description="Look back this many hours for recent activity. Mutually exclusive with 'since_timestamp'.")] = None,
     since_timestamp: Annotated[Optional[datetime], Field(description="Look back for activity since this specific timestamp. Mutually exclusive with 'hours_ago'.")] = None,
     limit_per_type: Annotated[Optional[int], Field(default=5, gt=0, description="Maximum number of recent items to show per activity type (e.g., 5 most recent decisions).")] = 5
@@ -712,7 +716,7 @@ async def tool_get_recent_activity_summary(
 async def tool_semantic_search_conport(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     query_text: Annotated[str, Field(min_length=1, description="The natural language query text for semantic search.")],
-    ctx: MCPContext,
+    ctx: Context,
     top_k: Annotated[int, Field(default=5, ge=1, le=25, description="Number of top results to return.")] = 5,
     filter_item_types: Annotated[Optional[List[str]], Field(description="Optional list of item types to filter by (e.g., ['decision', 'custom_data']). Valid types: 'decision', 'system_pattern', 'custom_data', 'progress_entry'.")] = None,
     filter_tags_include_any: Annotated[Optional[List[str]], Field(description="Optional list of tags; results will include items matching any of these tags.")] = None,

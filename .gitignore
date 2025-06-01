@@ -22,6 +22,7 @@ logs/
 conport_migration_test_backup/
 alembic/
 alembic.ini
+build.ps1
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

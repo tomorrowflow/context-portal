@@ -343,6 +343,95 @@ uv run python /path/to/your/context-portal/src/context_portal_mcp/main.py --mode
 `"/actual/path/to/your/project_workspace"` is the absolute path to the root of the project whose context ConPort will manage (e.g., `${workspaceFolder}` in VS Code).
 ConPort automatically creates its database at `your_project_workspace/context_portal/context.db`.
 
+## Docker Image Usage
+
+The Context Portal MCP server is available as a Docker image, providing a convenient way to run ConPort without managing Python environments directly.
+
+### Pulling the Docker Image
+
+You can pull the latest Docker image from Docker Hub:
+
+```bash
+docker pull greatscottymac/context-portal-mcp:latest
+```
+
+### Running the Docker Image
+
+Once pulled, you can run the Docker image. ConPort requires a `workspace_id` to store its data. This will create a `context_portal` directory with `context.db` and `conport_vector_data/` inside your specified workspace.
+
+**1. Direct Docker Run (for testing or manual use):**
+
+Replace `/path/to/your/project_workspace` with the absolute path to your project's root directory.
+
+```bash
+docker run -d \
+  --name conport-server-instance \
+  -p 8000:8000 \
+  -v "/path/to/your/project_workspace:/app/workspace" \
+  greatscottymac/context-portal-mcp:latest \
+  --mode http \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --workspace_id "/app/workspace" \
+  --log-file "/app/workspace/logs/conport.log" \
+  --log-level INFO
+```
+
+- `-d`: Run in detached mode.
+- `--name conport-server-instance`: Assign a name to the container for easy management.
+- `-p 8000:8000`: Map port 8000 on your host to port 8000 in the container.
+- `-v "/path/to/your/project_workspace:/app/workspace"`: Mount your local project workspace into the container. This is crucial for ConPort to store its `context.db` and `conport_vector_data/` within your project.
+- `--mode http`: Run the server in HTTP mode.
+- `--host 0.0.0.0 --port 8000`: Make the server accessible on all network interfaces within the container.
+- `--workspace_id "/app/workspace"`: The path inside the container where ConPort will find/create its data. This must match the mounted volume.
+- `--log-file "/app/workspace/logs/conport.log"`: Log file path inside the container.
+- `--log-level INFO`: Set the logging level.
+
+To stop and remove the container:
+
+```bash
+docker stop conport-server-instance
+docker rm conport-server-instance
+```
+
+**2. Using with an MCP Client (Recommended for IDE Integration):**
+
+For seamless integration with IDEs and other MCP clients, configure your client to manage the Docker container lifecycle. This allows the client to start and stop the ConPort server as needed.
+
+Here's an example `mcp_settings.json` configuration for a client that supports Docker command execution (like the one used in this project):
+
+```json
+{
+  "mcpServers": {
+    "conport": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "--name", "conport-server-instance",
+        "-p", "8000:8000",
+        "-v", "${workspaceFolder}:/app/workspace",
+        "greatscottymac/context-portal-mcp:latest",
+        "--mode", "http",
+        "--host", "0.0.0.0",
+        "--port", "8000",
+        "--workspace_id", "/app/workspace",
+        "--log-file", "/app/workspace/logs/conport.log",
+        "--log-level", "INFO"
+      ]
+    }
+  }
+}
+```
+
+- `"command": "docker"`: Specifies that the `docker` command should be executed.
+- `"args"`: Contains the arguments passed to the `docker` command.
+  - `--rm`: Automatically remove the container when it exits.
+  - `-v "${workspaceFolder}:/app/workspace"`: Uses the IDE's `${workspaceFolder}` variable to dynamically mount your current project workspace.
+- The rest of the arguments are passed directly to the `context-portal-mcp` Docker image.
+
+With this configuration, your MCP client will handle starting and stopping the Docker container automatically when you interact with the `conport` server.
+
 <br>
 
 **Purpose of the `--workspace_id` Command-Line Argument:**

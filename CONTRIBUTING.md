@@ -86,6 +86,43 @@ We follow a standard GitHub pull request workflow.
 8.  **Push Your Branch:** Push your branch to your fork on GitHub.
 9.  **Open a Pull Request:** Open a pull request from your fork to the main repository's `main` branch. Provide a clear description of your changes.
 
+### Building and Publishing Docker Images
+
+If your contribution involves changes to the Docker image or you need to publish a new version, follow these steps:
+
+1.  **Ensure Docker is Installed:** Make sure Docker Desktop (or Docker Engine) is installed and running on your system.
+2.  **Build the Docker Image:**
+    Navigate to the root of the `context-portal` repository and use the `build.ps1` script (for PowerShell users) or `docker build` command directly.
+
+    Using `build.ps1` (recommended for Windows):
+    ```powershell
+    ./build.ps1
+    ```
+    This script handles building the image and tagging it appropriately.
+
+    Manual Docker Build:
+    ```bash
+    docker build -t greatscottymac/context-portal-mcp:latest .
+    # You can also tag with a specific version:
+    # docker build -t greatscottymac/context-portal-mcp:vX.Y.Z .
+    ```
+3.  **Log in to Docker Hub:**
+    Before pushing, you need to log in to your Docker Hub account from your terminal:
+    ```bash
+    docker login
+    ```
+    You will be prompted to enter your Docker ID and password.
+4.  **Push the Docker Image:**
+    After a successful build and login, push the image to Docker Hub:
+    ```bash
+    docker push greatscottymac/context-portal-mcp:latest
+    # If you tagged with a specific version:
+    # docker push greatscottymac/context-portal-mcp:vX.Y.Z
+    ```
+    This will upload the image to the `greatscottymac/context-portal-mcp` repository on Docker Hub.
+5.  **Verify on Docker Hub:**
+    Confirm that the image has been successfully pushed by checking your Docker Hub repository in your web browser.
+
 ### Documentation Improvements
 
 Improving documentation is a valuable contribution! You can suggest changes by opening issues or submitting pull requests directly to the `docs/` or root Markdown files (`README.md`, `CONTRIBUTING.md`, etc.).
