@@ -345,7 +345,7 @@ uv run python /path/to/your/context-portal/src/context_portal_mcp/main.py --mode
 `"/actual/path/to/your/project_workspace"` is the absolute path to the root of the project whose context ConPort will manage (e.g., `${workspaceFolder}` in VS Code).
 ConPort automatically creates its database at `your_project_workspace/context_portal/context.db`.
 
-## Docker Image Usage
+## Docker Image Usage ⚠️Still Under Development⚠️
 
 The Context Portal MCP server is available as a Docker image, providing a convenient way to run ConPort without managing Python environments directly.
 
