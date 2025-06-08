@@ -43,4 +43,4 @@ USER appuser
 
 # Command to run the ConPort server
 ENTRYPOINT ["python", "-m", "context_portal_mcp.main"]
-CMD ["--mode", "stdio", "--workspace_id", "/app/context_portal", "--log-file", "/data/logs/conport.log", "--log-level", "INFO"]
+CMD ["--mode","stdio","--workspace_id","${workspaceFolder}","--log-file","./logs/conport.log","--log-level","INFO"]

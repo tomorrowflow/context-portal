@@ -77,6 +77,8 @@ def ensure_alembic_files_exist(workspace_root_dir: Path):
     log.debug(f"ensure_alembic_files_exist: template_alembic_dir = {template_alembic_dir}")
 
     # Check for alembic.ini
+    log.debug(f"Checking for alembic.ini at: {alembic_ini_path}")
+    log.debug(f"alembic.ini exists? {alembic_ini_path.exists()}")
     if not alembic_ini_path.exists():
         log.debug(f"alembic.ini not found at {alembic_ini_path}. Attempting to provision.")
         template_ini_path = template_alembic_dir / "alembic.ini"
@@ -87,11 +89,14 @@ def ensure_alembic_files_exist(workspace_root_dir: Path):
                 log.debug(f"alembic.ini copied. Exists: {alembic_ini_path.exists()}")
             except shutil.Error as e:
                 log.error(f"Failed to copy alembic.ini: {e}")
-                raise DatabaseError(f"Failed to provision alembic.ini: {e}")
+                raise DatabaseError(f"Failed to provision alembic.ini: {e}. Checked path: {alembic_ini_path}, Exists: {alembic_ini_path.exists()}")
         else:
+            raise DatabaseError(f"Template alembic.ini not found at {template_ini_path}. Cannot auto-provision. Checked path: {alembic_ini_path}, Exists: {alembic_ini_path.exists()}")
             log.warning(f"Template alembic.ini not found at {template_ini_path}. Cannot auto-provision.")
 
     # Check for alembic/ directory
+    log.debug(f"Checking for alembic/ directory at: {alembic_dir_path}")
+    log.debug(f"alembic/ directory exists? {alembic_dir_path.exists()}")
     if not alembic_dir_path.exists():
         log.debug(f"alembic/ directory not found at {alembic_dir_path}. Attempting to provision.")
         template_scripts_dir = template_alembic_dir / "alembic"
@@ -102,8 +107,9 @@ def ensure_alembic_files_exist(workspace_root_dir: Path):
                 log.debug(f"alembic/ directory copied. Exists: {alembic_dir_path.exists()}")
             except shutil.Error as e:
                 log.error(f"Failed to copy alembic/ directory: {e}")
-                raise DatabaseError(f"Failed to provision alembic/ directory: {e}")
+                raise DatabaseError(f"Failed to provision alembic/ directory: {e}. Checked path: {alembic_dir_path}, Exists: {alembic_dir_path.exists()}")
         else:
+            raise DatabaseError(f"Template alembic/ directory not found at {template_scripts_dir}. Cannot auto-provision. Checked path: {alembic_dir_path}, Exists: {alembic_dir_path.exists()}")
             log.warning(f"Template alembic/ directory not found at {template_scripts_dir}. Cannot auto-provision.")
 
 def run_migrations(db_path: Path, project_root_dir: Path):

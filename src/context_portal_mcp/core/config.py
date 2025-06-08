@@ -22,10 +22,15 @@ def get_database_path(workspace_id: str) -> pathlib.Path:
     """
     # Basic example: Assume workspace_id is the workspace root path
     # Store DB in a .context_portal directory within the workspace
-    if not workspace_id or not os.path.isdir(workspace_id):
-        raise ValueError(f"Invalid workspace_id: {workspace_id}")
+    # Ensure workspace_id uses POSIX separators for consistency within Docker
+    # This is a defensive measure against potential path mangling
+    posix_workspace_id = workspace_id.replace('\\', '/')
+    log.debug(f"Normalized workspace_id to POSIX: {posix_workspace_id}")
 
-    workspace_path = pathlib.Path(workspace_id)
+    if not posix_workspace_id or not os.path.isdir(posix_workspace_id):
+        raise ValueError(f"Invalid workspace_id: {posix_workspace_id}")
+
+    workspace_path = pathlib.Path(posix_workspace_id)
     log.debug(f"Constructed workspace_path: {workspace_path}")
     db_dir = workspace_path / "context_portal"
     log.debug(f"Constructed db_dir: {db_dir}")

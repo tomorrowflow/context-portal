@@ -750,10 +750,10 @@ async def tool_semantic_search_conport(
         log.error(f"Unexpected error processing args for semantic_search_conport: {e}. Args: workspace_id={workspace_id}, query_text='{query_text}'")
         raise exceptions.ContextPortalError(f"Server error processing semantic_search_conport: {type(e).__name__} - {e}")
 
-# Mount the FastMCP SSE app to the FastAPI app at the /mcp path
-# This will handle GET for SSE and POST for JSON-RPC client requests
-app.mount("/mcp", conport_mcp.sse_app())
-log.info("Mounted FastMCP app at /mcp")
+# Mount the FastMCP HTTP app to the FastAPI app at the /mcp path
+# This will handle both GET and POST requests using modern HTTP transport
+app.mount("/mcp", conport_mcp.http_app())
+log.info("Mounted FastMCP HTTP app at /mcp")
 
 # Keep a simple root endpoint for health checks or basic info
 @app.get("/")
