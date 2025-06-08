@@ -151,3 +151,4 @@ dmypy.json
 /context_portal/
 *.sqlite
 *.sqlite-journal
+uv.lock
