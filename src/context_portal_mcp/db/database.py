@@ -111,6 +111,9 @@ def run_migrations(db_path: Path, project_root_dir: Path):
     Runs Alembic migrations to upgrade the database to the latest version.
     This function is called on database connection to ensure schema is up-to-date.
     """
+    # Ensure Alembic files exist before attempting to run migrations
+    ensure_alembic_files_exist(project_root_dir)
+    
     # Construct the absolute path to alembic.ini and the scripts directory
     # using the provided project_root_dir
     alembic_ini_path = project_root_dir / Path("alembic.ini")

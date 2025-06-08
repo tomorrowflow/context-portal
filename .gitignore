@@ -5,7 +5,6 @@
 generate_mcp_yaml.py
 generate_mcp_yaml
 install_rooflow.*
-install_rooflow.*
 system_prompt.md
 backup/
 mcp-reference/
@@ -20,8 +19,7 @@ conport-export/
 logs/
 .idea/
 conport_migration_test_backup/
-alembic/
-alembic.ini
+/alembic
 build.ps1
 
 # Byte-compiled / optimized / DLL files
