@@ -28,6 +28,7 @@ except ImportError:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
     from src.context_portal_mcp.handlers import mcp_handlers
     from src.context_portal_mcp.db import database, models
+    from src.context_portal_mcp.db.database import ensure_alembic_files_exist
     from src.context_portal_mcp.core import exceptions
 
 # Configure logging
