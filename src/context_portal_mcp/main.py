@@ -875,7 +875,7 @@ def main_logic(sys_args=None):
         try:
             conport_mcp.run(transport="stdio")
         except Exception as e:
-
+            log.exception("Error running FastMCP in STDIO mode")
         # Note: The `FastMCP.run()` method is synchronous and will block until the server stops.
         # It requires the `mcp[cli]` extra to be installed for `mcp.server.stdio.run_server_stdio`.
         try:
