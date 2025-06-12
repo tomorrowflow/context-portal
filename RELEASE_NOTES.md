@@ -2,7 +2,7 @@
 
 <br>
 
-## Version 0.2.7 - Alembic, Encoding, and Usability Enhancements
+## Version 0.2.8 - Alembic, Encoding, and Usability Enhancements
 
 This release introduces several key improvements, including a fix for Alembic migrations, enhanced UTF-8 encoding for file operations, and a streamlined installation process.
 
@@ -12,6 +12,7 @@ This release introduces several key improvements, including a fix for Alembic mi
 - **UTF-8 Encoding:** All file read/write operations during data import and export now explicitly use `encoding="utf-8"`. This prevents encoding errors and ensures cross-platform compatibility.
 - **Streamlined Installation:** The `README.md` has been updated to feature `uvx` as the primary and recommended method for running the ConPort server. This simplifies the setup process for new users. A special thanks to contributor [elasticdotventures](https://github.com/elasticdotventures) for their work on the `uvx` configuration.
 - **Automated Alembic Provisioning:** The ConPort server now automatically ensures that the necessary `alembic.ini` and `alembic/` directory are present in the workspace root at startup, copying them from internal templates if they are missing.
+- **Runtime Error Fix:** Corrected an `IndentationError` in `main.py` that occurred during server startup.
 
 **Impact:**
 
