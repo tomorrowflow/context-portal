@@ -130,11 +130,11 @@ def run_migrations(db_path: Path, project_root_dir: Path):
     
     # Explicitly set the script location as a main option.
     # This is often more robust than relying on the .ini file or cmd_opts for this specific setting.
-    alembic_cfg.set_main_option("script_location", str(alembic_scripts_path))
+    alembic_cfg.set_main_option("script_location", alembic_scripts_path.as_posix())
 
     # Override sqlalchemy.url in alembic.ini to point to the specific workspace's DB
     # This is crucial for multi-workspace support.
-    alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path.as_posix()}")
 
     # Configure logging for Alembic (optional, can be done via Python's root logger)
     # The fileConfig call was causing issues and is not strictly necessary if alembic.ini
