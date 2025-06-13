@@ -2,6 +2,20 @@
 
 <br>
 
+## Version 0.2.10 - Pydantic Model Hotfix
+
+This release addresses a critical bug that caused MCP connection failures on Windows due to improper path escaping in the generated tool schema.
+
+**Key Fix:**
+
+- **Pydantic Model Default Fix:** Modified `src/context_portal_mcp/db/models.py` to add `default=None` to optional path arguments in the `ExportConportToMarkdownArgs` and `ImportMarkdownToConportArgs` models. This prevents Pydantic from generating default path values that contain unescaped backslashes on Windows, resolving the `SyntaxError: Bad escaped character in JSON` error during server startup.
+
+**Impact:**
+
+This is a critical fix for Windows users, ensuring the ConPort MCP server can start and run reliably.
+
+<br>
+
 ## Version 0.2.9 - Path Escaping Hotfix
 
 This release addresses a critical bug that caused MCP connection failures on Windows due to improper path escaping.
