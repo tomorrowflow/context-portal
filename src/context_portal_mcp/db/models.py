@@ -238,13 +238,13 @@ class SearchProjectGlossaryArgs(BaseArgs):
 
 class ExportConportToMarkdownArgs(BaseArgs):
     """Arguments for exporting ConPort data to markdown files."""
-    output_path: Optional[str] = Field(None, description="Optional output directory path relative to workspace_id. Defaults to './conport_export/' if not provided.")
+    output_path: Optional[str] = Field(default=None, description="Optional output directory path relative to workspace_id. Defaults to './conport_export/' if not provided.")
 
 # --- Import Tool ---
 
 class ImportMarkdownToConportArgs(BaseArgs):
     """Arguments for importing markdown files into ConPort data."""
-    input_path: Optional[str] = Field(None, description="Optional input directory path relative to workspace_id containing markdown files. Defaults to './conport_export/' if not provided.")
+    input_path: Optional[str] = Field(default=None, description="Optional input directory path relative to workspace_id containing markdown files. Defaults to './conport_export/' if not provided.")
 
 # --- Knowledge Graph Link Tools ---
 
