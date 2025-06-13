@@ -58,7 +58,7 @@ async def conport_lifespan(server: FastMCP) -> AsyncIterator[None]:
 
 # --- FastMCP Server Instance ---
 # Version from pyproject.toml would be ideal here, or define centrally
-CONPORT_VERSION = "0.2.7" # Updated for new release
+CONPORT_VERSION = "0.2.4" # Updated to match current release
 
 conport_mcp = FastMCP(
     name="ConPort", # Pass name directly
@@ -841,41 +841,41 @@ def main_logic(sys_args=None):
         except Exception as e:
             log.error(f"Failed to set up file logging to {args.log_file}: {e}")
 
-    # Determine effective_workspace_id
-    effective_workspace_id = args.workspace_id
-    if args.workspace_id == "${workspaceFolder}":
-        current_cwd = os.getcwd()
-        warning_msg = (
-            f"MAIN.PY: WARNING - Workspace ID was literally '${{workspaceFolder}}'. "
-            f"This variable was not expanded by the client IDE. "
-            f"Falling back to current working directory as workspace_id: {current_cwd}. "
-            f"Ensure CWD in MCP config ('{current_cwd}') is the correct project workspace."
-        )
-        log.warning(warning_msg)
-        effective_workspace_id = current_cwd
-
-    # Validate and provision Alembic files for the effective_workspace_id
-    if not effective_workspace_id or not os.path.isdir(effective_workspace_id):
-        log.error(f"Effective workspace_id ('{effective_workspace_id}') is not a valid directory. Cannot provision Alembic files.")
-        sys.exit(1)
-
-    try:
-        ensure_alembic_files_exist(Path(effective_workspace_id))
-        log.info(f"Alembic files ensured for workspace '{effective_workspace_id}'.")
-    except Exception as e:
-        log.error(f"Failed to ensure Alembic files exist for workspace '{effective_workspace_id}': {e}")
-        sys.exit(1)
-
-    # Now proceed with mode-specific logic
     if args.mode == "http":
         log.info(f"Starting ConPort HTTP server (via FastMCP) on {args.host}:{args.port}")
+        # The FastAPI `app` (with FastMCP mounted) is run by Uvicorn
         uvicorn.run(app, host=args.host, port=args.port)
     elif args.mode == "stdio":
-        log.info(f"Starting ConPort in STDIO mode using FastMCP for initial CLI arg workspace_id: {effective_workspace_id}")
+        log.info(f"Starting ConPort in STDIO mode using FastMCP for initial CLI arg workspace_id: {args.workspace_id}")
+
+        effective_workspace_id = args.workspace_id
+        if args.workspace_id == "${workspaceFolder}":
+            # import os # Moved to top-level imports
+            current_cwd = os.getcwd()
+            warning_msg = (
+                f"MAIN.PY: WARNING - Workspace ID was literally '${{workspaceFolder}}'. "
+                f"This variable was not expanded by the client IDE. "
+                f"Falling back to current working directory as workspace_id: {current_cwd}. "
+                f"Ensure CWD in MCP config ('{current_cwd}') is the correct project workspace."
+            )
+            log.warning(warning_msg)
+            effective_workspace_id = current_cwd
+
         try:
-            conport_mcp.run(transport="stdio")
-        except Exception as e:
-            log.exception("Error running FastMCP in STDIO mode")
+            # from src.context_portal_mcp.core.config import get_database_path # Import happens at module level
+            # Call the provisioning function at server startup
+            ensure_alembic_files_exist(Path(effective_workspace_id))
+            # get_database_path(effective_workspace_id) # EARLY VALIDATION REMOVED - Path validation and dir creation will occur on first DB access.
+
+            if not effective_workspace_id or not os.path.isdir(effective_workspace_id): # Basic check if path is a directory
+                 log.error(f"STDIO mode: effective_workspace_id ('{effective_workspace_id}') is not a valid directory. Please ensure client provides a correct absolute path or sets 'cwd' appropriately if using '${{workspaceFolder}}'.")
+                 sys.exit(1)
+
+            log.info(f"STDIO mode: Using effective_workspace_id '{effective_workspace_id}'. Database directory will be created on first actual DB use.")
+        except Exception as e: # Catch any other unexpected errors during this initial workspace_id handling
+            log.error(f"Unexpected error processing effective_workspace_id '{effective_workspace_id}' in STDIO mode setup: {e}")
+            sys.exit(1)
+
         # Note: The `FastMCP.run()` method is synchronous and will block until the server stops.
         # It requires the `mcp[cli]` extra to be installed for `mcp.server.stdio.run_server_stdio`.
         try:

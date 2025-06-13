@@ -273,6 +273,9 @@ def update_product_context(workspace_id: str, update_args: models.UpdateContextA
         raise DatabaseError(f"Failed to update product_context: {e}")
     finally:
         if cursor:
+            cursor.close()
+
+            
 def get_active_context(workspace_id: str) -> models.ActiveContext:
     """Retrieves the active context."""
     conn = get_db_connection(workspace_id)
