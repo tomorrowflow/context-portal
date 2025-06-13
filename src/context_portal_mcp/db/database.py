@@ -155,7 +155,6 @@ def run_migrations(db_path: Path, project_root_dir: Path):
 
     log.info(f"Running Alembic migrations for database: {db_path}")
     try:
-        cursor = None # Initialize cursor to None
         command.upgrade(alembic_cfg, "head")
         log.info(f"Alembic migrations completed successfully for {db_path}.")
     except Exception as e:
@@ -274,7 +273,6 @@ def update_product_context(workspace_id: str, update_args: models.UpdateContextA
         raise DatabaseError(f"Failed to update product_context: {e}")
     finally:
         if cursor:
-            cursor.close()
 def get_active_context(workspace_id: str) -> models.ActiveContext:
     """Retrieves the active context."""
     conn = get_db_connection(workspace_id)
@@ -365,7 +363,6 @@ def log_decision(workspace_id: str, decision_data: models.Decision) -> models.De
         tags_json
     )
     try:
-        cursor = conn.cursor()
         cursor = conn.cursor()
         cursor.execute(sql, params)
         decision_id = cursor.lastrowid
@@ -871,7 +868,6 @@ def delete_custom_data(workspace_id: str, category: str, key: str) -> bool:
     sql = "DELETE FROM custom_data WHERE category = ? AND key = ?"
     params = (category, key)
     try:
-        cursor = conn.cursor()
         cursor = conn.cursor()
         cursor.execute(sql, params)
         conn.commit()

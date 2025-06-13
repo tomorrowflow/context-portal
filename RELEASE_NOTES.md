@@ -2,6 +2,20 @@
 
 <br>
 
+## Version 0.2.11 - Cursor Initialization Hotfix
+
+This release addresses a critical bug that caused `NameError: name 'cursor' is not defined` during database operations.
+
+**Key Fix:**
+
+- **Cursor Initialization Fix:** Corrected `src/context_portal_mcp/db/database.py` to ensure the `cursor` variable is always initialized before use within database functions. This resolves the `NameError` and ensures robust database interactions.
+
+**Impact:**
+
+This is a critical fix for server stability, ensuring all database operations function correctly.
+
+<br>
+
 ## Version 0.2.10 - Pydantic Model Hotfix
 
 This release addresses a critical bug that caused MCP connection failures on Windows due to improper path escaping in the generated tool schema.
