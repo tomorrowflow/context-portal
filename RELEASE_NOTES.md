@@ -2,6 +2,20 @@
 
 <br>
 
+## Version 0.2.9 - Path Escaping Hotfix
+
+This release addresses a critical bug that caused MCP connection failures on Windows due to improper path escaping.
+
+**Key Fix:**
+
+- **JSON Escape Character Fix:** Modified `src/context_portal_mcp/db/database.py` to use `.as_posix()` when constructing file paths for Alembic. This ensures that all paths use forward slashes, preventing `SyntaxError: Bad escaped character in JSON` errors when the server communicates with the client on Windows.
+
+**Impact:**
+
+This is a critical fix for Windows users, ensuring the ConPort MCP server can start and run reliably.
+
+<br>
+
 ## Version 0.2.8 - Alembic, Encoding, and Usability Enhancements
 
 This release introduces several key improvements, including a fix for Alembic migrations, enhanced UTF-8 encoding for file operations, and a streamlined installation process.
