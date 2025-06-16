@@ -1,9 +1,5 @@
 <div align="center">
 
-**⚠️ Currently working out the correct client config for the Docker version ⚠️**
-
-**⚠️ Please see [v0.2.4_UPDATE_GUIDE.md](https://github.com/GreatScottyMac/context-portal/blob/main/v0.2.4_UPDATE_GUIDE.md) if updating from a previous version of Context Portal MCP ⚠️**
-
 <br>
 
 # Context Portal MCP (ConPort)
@@ -63,87 +59,24 @@ Before you begin, ensure you have the following installed:
   - Ensure Python is added to your system's PATH during installation (especially on Windows).
 - **uv:** (Highly Recommended) A fast Python environment and package manager. Using `uv` significantly simplifies virtual environment creation and dependency installation.
   - [Install uv](https://github.com/astral-sh/uv#installation)
-  - If you choose not to use `uv`, you can use standard Python `venv` and `pip`, but `uv` is preferred for this project.
 
-### Installation via PyPI:
+## Installation and Configuration (Recommended)
 
-**Create and activate a virtual environment in the directory where you install your MCP servers:**
+The recommended way to install and run ConPort is by using `uvx` to execute the package directly from PyPI. This method avoids the need to manually create and manage virtual environments.
 
-**Using `uv` (recommended):**
+### `uvx` Configuration
 
-```bash
-uv venv
-```
-
-**Activate the environment:**
-
-Linux/macOS (bash/zsh):
-
-```bash
-source .venv/bin/activate
-```
-
-Windows (Command Prompt):
-
-```cmd
-.venv\Scripts\activate.bat
-```
-
-Windows (PowerShell):
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-(If you encounter execution policy issues in PowerShell, you might need to run `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` first.)
-
-**Using standard `venv` (if not using `uv`):**
-
-In your MCP server directory:
-
-```bash
-python3 -m venv .venv  # Or 'python -m venv .venv'
-```
-
-Activation commands are the same as for `uv` above.
-
-<br>
-
-**Install ConPort via PyPi:**
-
-The PyPI installation command for context-portal-mcp using uv is:
-
-```bash
-uv pip install context-portal-mcp
-```
-
-
-<br>
-
-If you are using standard pip within a virtual environment, the command is:
-
-```bash
-pip install context-portal-mcp
-```
-
-<br>
-
-### Configuration for PyPI Installation
-
-If you installed ConPort via PyPI (`pip install context-portal-mcp`), the ConPort server can be launched directly using the Python interpreter within your virtual environment. This method is generally more reliable as it explicitly points to the executable.
-
-**Important:** You **MUST** replace the placeholder path `/home/USER/PATH/TO/.venv/bin/python` (or `C:\\Users\\USER\\PATH\\TO\\.venv\\Scripts\\python.exe` on Windows) with the **absolute path** to the Python executable within your specific ConPort virtual environment.
-
-**Linux/macOS Example:**
+In your MCP client settings (e.g., `mcp_settings.json`), use the following configuration:
 
 ```json
 {
   "mcpServers": {
     "conport": {
-      "command": "/home/USER/PATH/TO/.venv/bin/python",
+      "command": "uvx",
       "args": [
-        "-m",
-        "context_portal_mcp.main",
+        "--from",
+        "context-portal-mcp",
+        "conport-mcp",
         "--mode",
         "stdio",
         "--workspace_id",
@@ -158,42 +91,17 @@ If you installed ConPort via PyPI (`pip install context-portal-mcp`), the ConPor
 }
 ```
 
-**Windows Example:**
-
-```json
-{
-  "mcpServers": {
-    "conport": {
-      "command": "C:\\Users\\USER\\PATH\\TO\\.venv\\Scripts\\python.exe",
-      "args": [
-        "-m",
-        "context_portal_mcp.main",
-        "--mode",
-        "stdio",
-        "--workspace_id",
-        "${workspaceFolder}",
-        "--log-file",
-        "./logs/conport.log",
-        "--log-level",
-        "INFO"
-      ]
-    }
-  }
-}
-```
-
-- **`command`**: This must be the absolute path to the `python` (or `python.exe` on Windows) executable within the `.venv` of your ConPort installation.
-- **`args`**: Contains the arguments to run the ConPort server module (`-m context_portal_mcp.main`) and the server's arguments (`--mode stdio --workspace_id "${workspaceFolder}"`).
+- **`command`**: `uvx` handles the environment for you.
+- **`args`**: Contains the arguments to run the ConPort server.
 - `${workspaceFolder}`: This IDE variable is used to automatically provide the absolute path of the current project workspace.
 - `--log-file`: Optional: Path to a file where server logs will be written. If not provided, logs are directed to `stderr` (console). Useful for persistent logging and debugging server behavior.
 - `--log-level`: Optional: Sets the minimum logging level for the server. Valid choices are `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Defaults to `INFO`. Set to `DEBUG` for verbose output during development or troubleshooting.
 
-
 <br>
 
-## Installation from Git Repository
+## Installation for Developers (from Git Repository)
 
-These instructions guide you through setting up ConPort by cloning its Git repository and installing dependencies. Using a virtual environment is crucial.
+These instructions guide you through setting up ConPort for development or contribution by cloning its Git repository and installing dependencies.
 
 1.  **Clone the Repository:**
     Open your terminal or command prompt and run:
@@ -204,235 +112,40 @@ These instructions guide you through setting up ConPort by cloning its Git repos
     ```
 
 2.  **Create and Activate a Virtual Environment:**
+    In the `context-portal` directory:
 
-    - **Using `uv` (recommended):**
-      In the `context-portal` directory:
+    ```bash
+    uv venv
+    ```
 
+    Activate the environment:
+    - **Linux/macOS (bash/zsh):**
       ```bash
-      uv venv
+      source .venv/bin/activate
       ```
-
-      - **Activate the environment:**
-        - **Linux/macOS (bash/zsh):**
-          ```bash
-          source .venv/bin/activate
-          ```
-        - **Windows (Command Prompt):**
-          ```cmd
-          .venv\Scripts\activate.bat
-          ```
-        - **Windows (PowerShell):**
-          ```powershell
-          .venv\Scripts\Activate.ps1
-          ```
-          (If you encounter execution policy issues in PowerShell, you might need to run `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` first.)
-
-    - **Using standard `venv` (if not using `uv`):**
-      In the `context-portal` directory:
-      ```bash
-      python3 -m venv .venv  # Or 'python -m venv .venv'
+    - **Windows (Command Prompt):**
+      ```cmd
+      .venv\Scripts\activate.bat
       ```
-      - Activation commands are the same as for `uv` above.
+    - **Windows (PowerShell):**
+      ```powershell
+      .venv\Scripts\Activate.ps1
+      ```
 
 3.  **Install Dependencies:**
     With your virtual environment activated:
 
-    - **Using `uv` (recommended):**
-
-      ```bash
-      uv pip install -r requirements.txt
-      ```
-
-
-      _Note: `uv` can often detect and use the `.venv` in the current directory even without explicit activation for `uv pip install` commands. However, activation is still good practice, especially if you intend to run Python scripts directly._
-
-    - **Using standard `pip`:**
-      ```bash
-      pip install -r requirements.txt
-      ```
+    ```bash
+    uv pip install -r requirements.txt
+    ```
 
 4.  **Verify Installation (Optional):**
     Ensure your virtual environment is activated.
-    - **Using `uv`:**
-      ```bash
-      uv run python src/context_portal_mcp/main.py --help
-      ```
-    - **Using standard `python`:**
-      `bash
-    python src/context_portal_mcp/main.py --help
-    `
-      This should output the command-line help for the ConPort server.
-
-<br>
-
-**Recommended Configuration (Direct Python Invocation):**
-
-This configuration directly invokes the Python interpreter from the `context-portal` virtual environment. It's a reliable method that does not depend on `uv` being the command or the client supporting a `cwd` field for the server process.
-
-**Important:**
-
-- You **MUST** replace placeholder paths with the **absolute paths** corresponding to where you have cloned and set up your `context-portal` repository.
-- The `"${workspaceFolder}"` variable for the `--workspace_id` argument is a common IDE placeholder that should expand to the absolute path of your current project workspace.
-
-<br>
-
-**Linux/macOS Example:**
-
-Imagine your `context-portal` repository is cloned at `/home/youruser/mcp-servers/context-portal`.
-
-```json
-{
-  "mcpServers": {
-    "conport": {
-      "command": "/home/youruser/mcp-servers/context-portal/.venv/bin/python",
-      "args": [
-        "/home/youruser/mcp-servers/context-portal/src/context_portal_mcp/main.py",
-        "--mode",
-        "stdio",
-        "--workspace_id",
-        "${workspaceFolder}",
-        "--log-file",
-        "./logs/conport.log",
-        "--log-level",
-        "INFO"
-      ]
-    }
-  }
-}
-```
-
-<br>
-
-**Windows Example:**
-
-Imagine your `context-portal` repository is cloned at `C:\Users\YourUser\MCP-servers\context-portal`.
-Note the use of double backslashes `\\` for paths in JSON strings.
-
-```json
-{
-  "mcpServers": {
-    "conport": {
-      "command": "C:\\Users\\YourUser\\MCP-servers\\context-portal\\.venv\\Scripts\\python.exe",
-      "args": [
-        "C:\\Users\\YourUser\\MCP-servers\\context-portal\\src\\context_portal_mcp\\main.py",
-        "--mode",
-        "stdio",
-        "--workspace_id",
-        "${workspaceFolder}",
-        "--log-file",
-        "./logs/conport.log",
-        "--log-level",
-        "INFO"
-      ]
-    }
-  }
-}
-```
-
-- **`command`**: This must be the absolute path to the `python` (or `python.exe` on Windows) executable within the `.venv` of your `context-portal` installation.
-- **First argument in `args`**: This must be the absolute path to the `main.py` script within your `context-portal` installation.
-- **`--workspace_id "${workspaceFolder}"`**: This tells ConPort which project's context to manage. `${workspaceFolder}` should be resolved by your IDE to the current project's root path.
-- **`--log-file`**: Optional: Path to a file where server logs will be written. If not provided, logs are directed to `stderr` (console). Useful for persistent logging and debugging server behavior.
-- **`--log-level`**: Optional: Sets the minimum logging level for the server. Valid choices are `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Defaults to `INFO`. Set to `DEBUG` for verbose output during development or troubleshooting.
-
-When installed via cloned Git repository, the IDE will typically construct and run a command similar to this:
-
-```bash
-uv run python /path/to/your/context-portal/src/context_portal_mcp/main.py --mode stdio --workspace_id "/actual/path/to/your/project_workspace"
-```
-
-`/path/to/your/context-portal/` is the absolute path where you cloned the `context-portal` repository.
-`"/actual/path/to/your/project_workspace"` is the absolute path to the root of the project whose context ConPort will manage (e.g., `${workspaceFolder}` in VS Code).
-ConPort automatically creates its database at `your_project_workspace/context_portal/context.db`.
-
-## Docker Image Usage ⚠️Still Under Development⚠️
-
-The Context Portal MCP server is available as a Docker image, providing a convenient way to run ConPort without managing Python environments directly.
-
-### Pulling the Docker Image
-
-You can pull the latest Docker image from Docker Hub:
-
-```bash
-docker pull greatscottymac/context-portal-mcp:latest
-```
-
-### Running the Docker Image
-
-Once pulled, you can run the Docker image. ConPort requires a `workspace_id` to store its data. This will create a `context_portal` directory with `context.db` and `conport_vector_data/` inside your specified workspace.
-
-**1. Direct Docker Run (for testing or manual use):**
-
-Replace `/path/to/your/project_workspace` with the absolute path to your project's root directory.
-
-```bash
-docker run -d \
-  --name conport-server-instance \
-  -p 8000:8000 \
-  -v "/path/to/your/project_workspace:/app/workspace" \
-  greatscottymac/context-portal-mcp:latest \
-  --mode http \
-  --host 0.0.0.0 \
-  --port 8000 \
-  --workspace_id "/app/workspace" \
-  --log-file "/app/workspace/logs/conport.log" \
-  --log-level INFO
-```
-
-- `-d`: Run in detached mode.
-- `--name conport-server-instance`: Assign a name to the container for easy management.
-- `-p 8000:8000`: Map port 8000 on your host to port 8000 in the container.
-- `-v "/path/to/your/project_workspace:/app/workspace"`: Mount your local project workspace into the container. This is crucial for ConPort to store its `context.db` and `conport_vector_data/` within your project.
-- `--mode http`: Run the server in HTTP mode.
-- `--host 0.0.0.0 --port 8000`: Make the server accessible on all network interfaces within the container.
-- `--workspace_id "/app/workspace"`: The path inside the container where ConPort will find/create its data. This must match the mounted volume.
-- `--log-file "/app/workspace/logs/conport.log"`: Log file path inside the container.
-- `--log-level INFO`: Set the logging level.
-
-To stop and remove the container:
-
-```bash
-docker stop conport-server-instance
-docker rm conport-server-instance
-```
-
-**2. Using with an MCP Client (Recommended for IDE Integration):**
-
-For seamless integration with IDEs and other MCP clients, configure your client to manage the Docker container lifecycle. This allows the client to start and stop the ConPort server as needed.
-
-Here's an example `mcp_settings.json` configuration for a client that supports Docker command execution (like the one used in this project):
-
-```json
-{
-  "mcpServers": {
-    "conport": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "--name", "conport-server-instance",
-        "-p", "8000:8000",
-        "-v", "${workspaceFolder}:/app/workspace",
-        "greatscottymac/context-portal-mcp:latest",
-        "--mode", "http",
-        "--host", "0.0.0.0",
-        "--port", "8000",
-        "--workspace_id", "/app/workspace",
-        "--log-file", "/app/workspace/logs/conport.log",
-        "--log-level", "INFO"
-      ]
-    }
-  }
-}
-```
-
-- `"command": "docker"`: Specifies that the `docker` command should be executed.
-- `"args"`: Contains the arguments passed to the `docker` command.
-  - `--rm`: Automatically remove the container when it exits.
-  - `-v "${workspaceFolder}:/app/workspace"`: Uses the IDE's `${workspaceFolder}` variable to dynamically mount your current project workspace.
-- The rest of the arguments are passed directly to the `context-portal-mcp` Docker image.
-
-With this configuration, your MCP client will handle starting and stopping the Docker container automatically when you interact with the `conport` server.
+    
+    ```bash
+    uv run python src/context_portal_mcp/main.py --help
+    ```
+    This should output the command-line help for the ConPort server.
 
 <br>
 
@@ -451,14 +164,6 @@ When you launch the ConPort server, particularly in STDIO mode (`--mode stdio`),
 <br>
 
 For pre-upgrade cleanup, including clearing Python bytecode cache, please refer to the [v0.2.4_UPDATE_GUIDE.md](v0.2.4_UPDATE_GUIDE.md#1-pre-upgrade-cleanup).
-
-**Where to run these commands:**
-
-The directory where you should run these commands depends on how you installed ConPort:
-
-- **If installed from the Git repository:** Run these commands from the root directory of your cloned `context-portal` repository.
-- **If installed via PyPI:** Run these commands from within the site-packages directory of the Python environment where ConPort is installed (e.g., from the root of your virtual environment's `lib/pythonX.Y/site-packages/`).
-- **If running from the Docker image:** You would typically run these commands _inside_ the running Docker container using `docker exec <container_id> <command>`.
 
 ## Usage with LLM Agents (Custom Instructions)
 
@@ -680,4 +385,3 @@ Please see our [CONTRIBUTING.md](CONTRIBUTING.md) guide for details on how to co
 ## Database Migration & Update Guide
  
 For detailed instructions on how to manage your `context.db` file, especially when updating ConPort across versions that include database schema changes, please refer to the dedicated [v0.2.4_UPDATE_GUIDE.md](v0.2.4_UPDATE_GUIDE.md). This guide provides steps for manual data migration (export/import) if needed, and troubleshooting tips.
-

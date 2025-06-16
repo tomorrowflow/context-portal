@@ -876,31 +876,36 @@ def handle_export_conport_to_markdown(args: models.ExportConportToMarkdownArgs) 
         # Product Context
         product_ctx_data = db.get_product_context(args.workspace_id).content
         if product_ctx_data:
-            (output_path / "product_context.md").write_text(_format_product_context_md(product_ctx_data))
+            with open(output_path / "product_context.md", "w", encoding="utf-8") as f:
+                f.write(_format_product_context_md(product_ctx_data))
             files_created.append("product_context.md")
 
         # Active Context
         active_ctx_data = db.get_active_context(args.workspace_id).content
         if active_ctx_data:
-            (output_path / "active_context.md").write_text(_format_active_context_md(active_ctx_data))
+            with open(output_path / "active_context.md", "w", encoding="utf-8") as f:
+                f.write(_format_active_context_md(active_ctx_data))
             files_created.append("active_context.md")
 
         # Decisions
         decisions = db.get_decisions(args.workspace_id, limit=None) # Get all
         if decisions:
-            (output_path / "decision_log.md").write_text(_format_decisions_md(decisions))
+            with open(output_path / "decision_log.md", "w", encoding="utf-8") as f:
+                f.write(_format_decisions_md(decisions))
             files_created.append("decision_log.md")
 
         # Progress
         progress_entries = db.get_progress(args.workspace_id, limit=None) # Get all
         if progress_entries:
-            (output_path / "progress_log.md").write_text(_format_progress_md(progress_entries))
+            with open(output_path / "progress_log.md", "w", encoding="utf-8") as f:
+                f.write(_format_progress_md(progress_entries))
             files_created.append("progress_log.md")
 
         # System Patterns
         system_patterns = db.get_system_patterns(args.workspace_id)
         if system_patterns:
-            (output_path / "system_patterns.md").write_text(_format_system_patterns_md(system_patterns))
+            with open(output_path / "system_patterns.md", "w", encoding="utf-8") as f:
+                f.write(_format_system_patterns_md(system_patterns))
             files_created.append("system_patterns.md")
 
         # Custom Data
@@ -914,12 +919,12 @@ def handle_export_conport_to_markdown(args: models.ExportConportToMarkdownArgs) 
                     categories[item.category] = []
                 value_str = json.dumps(item.value, indent=2) if not isinstance(item.value, str) else item.value
                 categories[item.category].append(f"### {item.key}\n\n*   [{item.timestamp.strftime('%Y-%m-%d %H:%M:%S')}]\n\n```json\n{value_str}\n```\n")
-
-                for category_name_from_loop, items_md in categories.items(): # Renamed category to avoid clash
-                    cat_file_name = "".join(c if c.isalnum() else "_" for c in category_name_from_loop) + ".md"
-                    (custom_data_path / cat_file_name).write_text(f"# Custom Data: {category_name_from_loop}\n\n" + "\n---\n".join(items_md))
-                    files_created.append(f"custom_data/{cat_file_name}")
-
+            for category_name_from_loop, items_md in categories.items(): # Renamed category to avoid clash
+                cat_file_name = "".join(c if c.isalnum() else "_" for c in category_name_from_loop) + ".md"
+                with open(custom_data_path / cat_file_name, "w", encoding="utf-8") as f:
+                    f.write(f"# Custom Data: {category_name_from_loop}\n\n" + "\n---\n".join(items_md))
+                files_created.append(f"custom_data/{cat_file_name}")
+        
         return {"status": "success", "message": f"ConPort data exported to '{output_path}'. Files created: {', '.join(files_created)}"}
 
     except DatabaseError as e:
@@ -1087,7 +1092,8 @@ def handle_import_markdown_to_conport(args: models.ImportMarkdownToConportArgs) 
         file_to_import = input_path / filename
         if file_to_import.is_file():
             try:
-                content_str = file_to_import.read_text(encoding="utf-8")
+                with open(file_to_import, "r", encoding="utf-8") as f:
+                    content_str = f.read()
                 parsed_data = parser_func(content_str)
                 summary_report["files_processed"].append(filename)
 
@@ -1117,7 +1123,8 @@ def handle_import_markdown_to_conport(args: models.ImportMarkdownToConportArgs) 
         for category_md_file in custom_data_dir.glob("*.md"): # Renamed variable
             try:
                 category_name = category_md_file.stem.replace("_", " ")
-                content_str = category_md_file.read_text(encoding="utf-8")
+                with open(category_md_file, "r", encoding="utf-8") as f:
+                    content_str = f.read()
                 parsed_custom_items = _parse_custom_data_category_md(content_str, category_name)
                 for item_data in parsed_custom_items:
                     # item_data already contains 'category', 'key', 'value'

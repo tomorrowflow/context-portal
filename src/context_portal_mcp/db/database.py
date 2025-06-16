@@ -78,6 +78,8 @@ def ensure_alembic_files_exist(workspace_root_dir: Path):
     log.debug(f"ensure_alembic_files_exist: template_alembic_dir = {template_alembic_dir}")
 
     # Check for alembic.ini
+    log.debug(f"Checking for alembic.ini at: {alembic_ini_path}")
+    log.debug(f"alembic.ini exists? {alembic_ini_path.exists()}")
     if not alembic_ini_path.exists():
         log.debug(f"alembic.ini not found at {alembic_ini_path}. Attempting to provision.")
         template_ini_path = template_alembic_dir / "alembic.ini"
@@ -88,11 +90,14 @@ def ensure_alembic_files_exist(workspace_root_dir: Path):
                 log.debug(f"alembic.ini copied. Exists: {alembic_ini_path.exists()}")
             except shutil.Error as e:
                 log.error(f"Failed to copy alembic.ini: {e}")
-                raise DatabaseError(f"Failed to provision alembic.ini: {e}")
+                raise DatabaseError(f"Failed to provision alembic.ini: {e}. Checked path: {alembic_ini_path}, Exists: {alembic_ini_path.exists()}")
         else:
+            raise DatabaseError(f"Template alembic.ini not found at {template_ini_path}. Cannot auto-provision. Checked path: {alembic_ini_path}, Exists: {alembic_ini_path.exists()}")
             log.warning(f"Template alembic.ini not found at {template_ini_path}. Cannot auto-provision.")
 
     # Check for alembic/ directory
+    log.debug(f"Checking for alembic/ directory at: {alembic_dir_path}")
+    log.debug(f"alembic/ directory exists? {alembic_dir_path.exists()}")
     if not alembic_dir_path.exists():
         log.debug(f"alembic/ directory not found at {alembic_dir_path}. Attempting to provision.")
         template_scripts_dir = template_alembic_dir / "alembic"
@@ -103,8 +108,9 @@ def ensure_alembic_files_exist(workspace_root_dir: Path):
                 log.debug(f"alembic/ directory copied. Exists: {alembic_dir_path.exists()}")
             except shutil.Error as e:
                 log.error(f"Failed to copy alembic/ directory: {e}")
-                raise DatabaseError(f"Failed to provision alembic/ directory: {e}")
+                raise DatabaseError(f"Failed to provision alembic/ directory: {e}. Checked path: {alembic_dir_path}, Exists: {alembic_dir_path.exists()}")
         else:
+            raise DatabaseError(f"Template alembic/ directory not found at {template_scripts_dir}. Cannot auto-provision. Checked path: {alembic_dir_path}, Exists: {alembic_dir_path.exists()}")
             log.warning(f"Template alembic/ directory not found at {template_scripts_dir}. Cannot auto-provision.")
 
 def run_migrations(db_path: Path, project_root_dir: Path):
@@ -128,11 +134,11 @@ def run_migrations(db_path: Path, project_root_dir: Path):
 
     # Explicitly set the script location as a main option.
     # This is often more robust than relying on the .ini file or cmd_opts for this specific setting.
-    alembic_cfg.set_main_option("script_location", str(alembic_scripts_path))
+    alembic_cfg.set_main_option("script_location", alembic_scripts_path.as_posix())
 
     # Override sqlalchemy.url in alembic.ini to point to the specific workspace's DB
     # This is crucial for multi-workspace support.
-    alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path.as_posix()}")
 
     # Configure logging for Alembic (optional, can be done via Python's root logger)
     # The fileConfig call was causing issues and is not strictly necessary if alembic.ini
@@ -153,7 +159,6 @@ def run_migrations(db_path: Path, project_root_dir: Path):
 
     log.info(f"Running Alembic migrations for database: {db_path}")
     try:
-        cursor = None # Initialize cursor to None
         command.upgrade(alembic_cfg, "head")
         log.info(f"Alembic migrations completed successfully for {db_path}.")
     except Exception as e:
@@ -360,7 +365,6 @@ def log_decision(workspace_id: str, decision_data: models.Decision) -> models.De
         tags_json
     )
     try:
-        cursor = conn.cursor()
         cursor = conn.cursor()
         cursor.execute(sql, params)
         decision_id = cursor.lastrowid
@@ -875,7 +879,6 @@ def delete_custom_data(workspace_id: str, category: str, key: str) -> bool:
     sql = "DELETE FROM custom_data WHERE category = ? AND key = ?"
     params = (category, key)
     try:
-        cursor = conn.cursor()
         cursor = conn.cursor()
         cursor.execute(sql, params)
         conn.commit()

@@ -889,10 +889,10 @@ async def tool_get_cache_performance(
         log.error(f"Error processing args for get_cache_performance: {e}. Args: workspace_id={workspace_id}")
         raise exceptions.ContextPortalError(f"Server error processing get_cache_performance: {type(e).__name__}")
 
-# Mount the FastMCP SSE app to the FastAPI app at the /mcp path
-# This will handle GET for SSE and POST for JSON-RPC client requests
-app.mount("/mcp", conport_mcp.sse_app())
-log.info("Mounted FastMCP app at /mcp")
+# Mount the FastMCP HTTP app to the FastAPI app at the /mcp path
+# This will handle both GET and POST requests using modern HTTP transport
+app.mount("/mcp", conport_mcp.http_app())
+log.info("Mounted FastMCP HTTP app at /mcp")
 
 # Keep a simple root endpoint for health checks or basic info
 @app.get("/")
