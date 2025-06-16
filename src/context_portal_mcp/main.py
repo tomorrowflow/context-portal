@@ -443,24 +443,26 @@ async def tool_get_system_patterns(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     ctx: Context,
     tags_filter_include_all: Annotated[Optional[List[str]], Field(description="Filter: items must include ALL of these tags.")] = None,
-    tags_filter_include_any: Annotated[Optional[List[str]], Field(description="Filter: items must include AT LEAST ONE of these tags.")] = None
+    tags_filter_include_any: Annotated[Optional[List[str]], Field(description="Filter: items must include AT LEAST ONE of these tags.")] = None,
+    limit: Annotated[Optional[int], Field(gt=0, description="Maximum number of system patterns to return.")] = None
 ) -> List[Dict[str, Any]]:
     try:
         # The model's own validator will check tag filter exclusivity.
         pydantic_args = models.GetSystemPatternsArgs(
             workspace_id=workspace_id,
             tags_filter_include_all=tags_filter_include_all,
-            tags_filter_include_any=tags_filter_include_any
+            tags_filter_include_any=tags_filter_include_any,
+            limit=limit
         )
         return mcp_handlers.handle_get_system_patterns(pydantic_args)
     except exceptions.ContextPortalError as e:
         log.error(f"Error in get_system_patterns handler: {e}")
         raise
     except ValueError as e: # Catch Pydantic validation errors
-        log.error(f"Validation error for get_system_patterns: {e}. Args: workspace_id={workspace_id}, tags_all={tags_filter_include_all}, tags_any={tags_filter_include_any}")
+        log.error(f"Validation error for get_system_patterns: {e}. Args: workspace_id={workspace_id}, tags_all={tags_filter_include_all}, tags_any={tags_filter_include_any}, limit={limit}")
         raise exceptions.ContextPortalError(f"Invalid arguments for get_system_patterns: {e}")
     except Exception as e:
-        log.error(f"Error processing args for get_system_patterns: {e}. Args: workspace_id={workspace_id}, tags_all={tags_filter_include_all}, tags_any={tags_filter_include_any}")
+        log.error(f"Error processing args for get_system_patterns: {e}. Args: workspace_id={workspace_id}, tags_all={tags_filter_include_all}, tags_any={tags_filter_include_any}, limit={limit}")
         raise exceptions.ContextPortalError(f"Server error processing get_system_patterns: {type(e).__name__}")
 
 @conport_mcp.tool(name="log_custom_data_with_cache_hint", description="Enhanced custom data logging with cache optimization suggestions and automatic cache scoring.")

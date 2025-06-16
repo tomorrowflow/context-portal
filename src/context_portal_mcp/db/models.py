@@ -194,6 +194,7 @@ class GetSystemPatternsArgs(BaseArgs):
     """Arguments for retrieving system patterns."""
     tags_filter_include_all: Optional[List[str]] = Field(None, description="Filter: items must include ALL of these tags.")
     tags_filter_include_any: Optional[List[str]] = Field(None, description="Filter: items must include AT LEAST ONE of these tags.")
+    limit: Optional[int] = Field(None, gt=0, description="Maximum number of system patterns to return.")
 
     @model_validator(mode='before')
     @classmethod
