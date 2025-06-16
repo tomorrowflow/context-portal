@@ -1,9 +1,5 @@
 <div align="center">
 
-**⚠️ Currently not working in Roo Code v3.20.0+ ⚠️**
-
-**⚠️ Please see [v0.2.4_UPDATE_GUIDE.md](https://github.com/GreatScottyMac/context-portal/blob/main/v0.2.4_UPDATE_GUIDE.md) if updating from a previous version of Context Portal MCP ⚠️**
-
 <br>
 
 # Context Portal MCP (ConPort)
