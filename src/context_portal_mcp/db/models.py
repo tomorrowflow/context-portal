@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field, Json, model_validator
 from typing import Optional, Dict, Any, List, Annotated
-from datetime import datetime
+from datetime import datetime, timezone
 
 # --- Base Models ---
 
@@ -24,7 +24,7 @@ class ActiveContext(BaseContextModel):
 class Decision(BaseModel):
     """Model for the decisions table."""
     id: Optional[int] = None # Auto-incremented by DB
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     summary: str
     rationale: Optional[str] = None
     implementation_details: Optional[str] = None
@@ -33,7 +33,7 @@ class Decision(BaseModel):
 class ProgressEntry(BaseModel):
     """Model for the progress_entries table."""
     id: Optional[int] = None # Auto-incremented by DB
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: str # e.g., 'TODO', 'IN_PROGRESS', 'DONE'
     description: str
     parent_id: Optional[int] = None # For subtasks
@@ -41,7 +41,7 @@ class ProgressEntry(BaseModel):
 class SystemPattern(BaseModel):
     """Model for the system_patterns table."""
     id: Optional[int] = None # Auto-incremented by DB
-    timestamp: datetime = Field(default_factory=datetime.utcnow) # Added timestamp
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc)) # Added timestamp
     name: str # Should be unique
     description: Optional[str] = None
     tags: Optional[List[str]] = Field(None, description="Optional tags for categorization")
@@ -49,7 +49,7 @@ class SystemPattern(BaseModel):
 class CustomData(BaseModel):
     """Model for the custom_data table."""
     id: Optional[int] = None # Auto-incremented by DB
-    timestamp: datetime = Field(default_factory=datetime.utcnow) # Added timestamp
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc)) # Added timestamp
     category: str
     key: str
     value: Any # Store arbitrary JSON data (SQLAlchemy handles JSON str conversion for DB)
@@ -61,7 +61,7 @@ class CustomData(BaseModel):
 class ProductContextHistory(BaseModel):
     """Model for the product_context_history table."""
     id: Optional[int] = None # Auto-incremented by DB
-    timestamp: datetime = Field(default_factory=datetime.utcnow) # When this history record was created
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc)) # When this history record was created
     version: int # Version number for this context, incremented on each change
     content: Dict[str, Any] # The content of ProductContext at this version
     change_source: Optional[str] = Field(None, description="Brief description of what triggered the change, e.g., tool name or user action")
@@ -69,7 +69,7 @@ class ProductContextHistory(BaseModel):
 class ActiveContextHistory(BaseModel):
     """Model for the active_context_history table."""
     id: Optional[int] = None # Auto-incremented by DB
-    timestamp: datetime = Field(default_factory=datetime.utcnow) # When this history record was created
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc)) # When this history record was created
     version: int # Version number for this context, incremented on each change
     content: Dict[str, Any] # The content of ActiveContext at this version
     change_source: Optional[str] = Field(None, description="Brief description of what triggered the change, e.g., tool name or user action")
@@ -261,7 +261,7 @@ class ImportMarkdownToConportArgs(BaseArgs):
 class ContextLink(BaseModel):
     """Model for the context_links table."""
     id: Optional[int] = None # Auto-incremented by DB
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source_item_type: str = Field(..., description="Type of the source item (e.g., 'decision', 'progress_entry')")
     source_item_id: str = Field(..., description="ID or key of the source item") # Using str to accommodate string keys from custom_data etc.
     target_item_type: str = Field(..., description="Type of the target item")

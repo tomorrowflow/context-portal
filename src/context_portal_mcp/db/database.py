@@ -6,7 +6,7 @@ import os
 import uuid
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from alembic.config import Config
 from alembic import command
@@ -182,7 +182,7 @@ def _add_context_history_entry(
 ) -> None:
     """Adds an entry to the specified context history table."""
     content_json = json.dumps(content_dict)
-    timestamp = datetime.utcnow()
+    timestamp = datetime.now(timezone.utc)
     try:
         cursor.execute(
             f"""
@@ -1215,7 +1215,7 @@ def get_recent_activity_summary_data(
         "notes": []
     }
 
-    now_utc = datetime.utcnow()
+    now_utc = datetime.now(timezone.utc)
     summary_results["summary_period_end"] = now_utc.isoformat()
 
     if since_timestamp:
@@ -1492,7 +1492,7 @@ def get_hash_timestamp(hash_value: str) -> datetime:
     # or encode timestamp information in the hash itself
     
     # For now, return current time minus a small offset to simulate "previous" time
-    return datetime.utcnow() - timedelta(minutes=1)
+    return datetime.now(timezone.utc) - timedelta(minutes=1)
 
 def store_session_state(session_data: Dict[str, Any]) -> None:
     """Store session state (simple implementation)"""
@@ -1511,7 +1511,7 @@ def store_session_state(session_data: Dict[str, Any]) -> None:
             category="__session_state__",
             key=session_id,
             value=session_data,
-            metadata={"session": True, "created_at": datetime.utcnow().isoformat()},
+            metadata={"session": True, "created_at": datetime.now(timezone.utc).isoformat()},
             cache_score=0  # Session data doesn't need caching
         )
         

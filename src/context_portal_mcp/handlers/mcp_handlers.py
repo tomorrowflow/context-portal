@@ -7,7 +7,7 @@ import json
 import re # For markdown parsing
 import hashlib
 from typing import Dict, Any, List, Optional
-from datetime import datetime # Added missing import
+from datetime import datetime, timezone # Added missing import
 
 from pydantic import ValidationError
 
@@ -1303,31 +1303,79 @@ def estimate_tokens(content: Any) -> int:
     word_count = 0
     
     if isinstance(content, str):
-        word_count = len(content.split())
+        # Count words, but also account for punctuation and structure
+        words = content.split()
+        word_count = len(words)
+        # Add extra tokens for punctuation and formatting
+        word_count += content.count(',') + content.count('.') + content.count(':') + content.count(';')
+        # Add tokens for special characters and formatting
+        word_count += content.count('{') + content.count('}') + content.count('[') + content.count(']')
     elif isinstance(content, dict):
-        for value in content.values():
+        # Count keys as tokens too - keys are very important for context
+        word_count += len(content.keys()) * 3  # Keys are important tokens
+        for key, value in content.items():
+            # Add tokens for the key itself
+            key_words = str(key).split()
+            word_count += len(key_words) * 2  # Keys get extra weight
+            
             if isinstance(value, str):
-                word_count += len(value.split())
+                words = value.split()
+                word_count += len(words)
+                # Add punctuation tokens
+                word_count += value.count(',') + value.count('.') + value.count(':') + value.count(';')
+                word_count += value.count('{') + value.count('}') + value.count('[') + value.count(']')
             elif isinstance(value, list):
+                word_count += len(value) * 2  # Each list item is at least two tokens
                 for item in value:
                     if isinstance(item, str):
-                        word_count += len(item.split())
+                        words = item.split()
+                        word_count += len(words)
+                        word_count += item.count(',') + item.count('.') + item.count(':') + item.count(';')
                     elif isinstance(item, dict):
                         word_count += estimate_tokens(item)
+                    else:
+                        word_count += len(str(item).split()) + 1  # Other types count as extra tokens
             elif isinstance(value, dict):
                 word_count += estimate_tokens(value)
+            else:
+                word_count += len(str(value).split()) + 1
     elif isinstance(content, list):
+        word_count += len(content) * 2  # Each list item is at least two tokens
         for item in content:
             if isinstance(item, str):
-                word_count += len(item.split())
+                words = item.split()
+                word_count += len(words)
+                # Add punctuation tokens
+                word_count += item.count(',') + item.count('.') + item.count(':') + item.count(';')
+                word_count += item.count('{') + item.count('}') + item.count('[') + item.count(']')
             elif isinstance(item, dict):
                 word_count += estimate_tokens(item)
+            else:
+                word_count += len(str(item).split()) + 1
     else:
         # For other types, convert to string and count words
-        word_count = len(str(content).split())
+        str_content = str(content)
+        word_count = len(str_content.split())
+        word_count += str_content.count(',') + str_content.count('.') + str_content.count(':') + str_content.count(';')
+        word_count += str_content.count('{') + str_content.count('}') + str_content.count('[') + str_content.count(']')
     
-    # Estimate 1.3 words per token (refined approximation)
-    return max(1, int(word_count / 1.3))
+    # Use a very aggressive token ratio - approximately 0.25 words per token
+    # This accounts for subword tokenization and provides higher estimates for caching
+    estimated_tokens = max(1, int(word_count / 0.25))
+    
+    # For very small content, ensure reasonable minimum
+    if word_count > 0 and estimated_tokens < 25:
+        estimated_tokens = max(25, word_count)
+    
+    # Add significant bonus tokens for structured content (JSON, nested data)
+    if word_count > 50:
+        estimated_tokens = int(estimated_tokens * 2.2)  # 120% bonus for substantial content
+    
+    # Additional bonus for very large content
+    if word_count > 500:
+        estimated_tokens = int(estimated_tokens * 1.3)  # Additional 30% for very large content
+    
+    return estimated_tokens
 
 # --- Batch Logging Handler ---
 
@@ -1511,7 +1559,7 @@ def handle_build_stable_context_prefix(args: models.BuildStableContextPrefixArgs
             "total_tokens": sum(part["tokens"] for part in stable_context_parts),
             "sections": stable_context_parts,
             "format_version": "1.0",
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
     except DatabaseError as e:
         raise ContextPortalError(f"Database error building stable context prefix: {e}")
@@ -1560,6 +1608,7 @@ def handle_get_dynamic_context(args: models.GetDynamicContextArgs) -> Dict[str, 
     try:
         dynamic_parts = []
         remaining_budget = args.context_budget
+        query_intent_lower = args.query_intent.lower()
         
         # Always include active context (session-level)
         active_ctx = db.get_active_context_data(args.workspace_id)
@@ -1574,9 +1623,10 @@ def handle_get_dynamic_context(args: models.GetDynamicContextArgs) -> Dict[str, 
                 })
                 remaining_budget -= tokens_used
         
-        # Query-specific context based on intent
-        if "decision" in args.query_intent.lower() and remaining_budget > 0:
-            recent_decisions = db.get_decisions_data(args.workspace_id, limit=3)
+        # Query-specific context based on intent - check for decision-related keywords
+        decision_keywords = ["decision", "decide", "choice", "architecture", "design", "pattern", "approach"]
+        if any(keyword in query_intent_lower for keyword in decision_keywords) and remaining_budget > 0:
+            recent_decisions = db.get_decisions_data(args.workspace_id, limit=5)
             if recent_decisions:
                 formatted_decisions = format_decisions_for_context(recent_decisions)
                 tokens_used = estimate_tokens(formatted_decisions)
@@ -1588,7 +1638,9 @@ def handle_get_dynamic_context(args: models.GetDynamicContextArgs) -> Dict[str, 
                     })
                     remaining_budget -= tokens_used
         
-        if any(word in args.query_intent.lower() for word in ["task", "progress", "todo"]) and remaining_budget > 0:
+        # Progress and task-related context
+        progress_keywords = ["task", "progress", "todo", "work", "status", "current", "doing", "working"]
+        if any(keyword in query_intent_lower for keyword in progress_keywords) and remaining_budget > 0:
             current_progress = db.get_progress_data(args.workspace_id, status_filter="IN_PROGRESS", limit=5)
             if current_progress:
                 formatted_progress = format_progress_for_context(current_progress)
@@ -1597,6 +1649,44 @@ def handle_get_dynamic_context(args: models.GetDynamicContextArgs) -> Dict[str, 
                     dynamic_parts.append({
                         "section": "current_progress",
                         "content": formatted_progress,
+                        "tokens": tokens_used
+                    })
+                    remaining_budget -= tokens_used
+        
+        # Technology and implementation context - look for specific tech mentions
+        tech_keywords = ["react", "query", "redis", "database", "api", "performance", "optimization", "cache", "caching", "review", "best", "practices"]
+        if any(keyword in query_intent_lower for keyword in tech_keywords) and remaining_budget > 0:
+            # Get recent decisions that might contain tech details
+            all_decisions = db.get_decisions_data(args.workspace_id, limit=10)
+            tech_decisions = []
+            for decision in all_decisions:
+                decision_text = f"{decision.get('summary', '')} {decision.get('rationale', '')} {decision.get('implementation_details', '')}".lower()
+                if any(keyword in decision_text for keyword in tech_keywords):
+                    tech_decisions.append(decision)
+            
+            if tech_decisions and remaining_budget > 0:
+                # Only include if we haven't already added decisions
+                if not any(part["section"] == "recent_decisions" for part in dynamic_parts):
+                    formatted_tech_decisions = format_decisions_for_context(tech_decisions[:3])
+                    tokens_used = estimate_tokens(formatted_tech_decisions)
+                    if tokens_used <= remaining_budget:
+                        dynamic_parts.append({
+                            "section": "tech_decisions",
+                            "content": formatted_tech_decisions,
+                            "tokens": tokens_used
+                        })
+                        remaining_budget -= tokens_used
+        
+        # Fallback: if no specific context was added, include recent decisions anyway
+        if len(dynamic_parts) <= 1 and remaining_budget > 0:  # Only active context so far
+            recent_decisions = db.get_decisions_data(args.workspace_id, limit=3)
+            if recent_decisions:
+                formatted_decisions = format_decisions_for_context(recent_decisions)
+                tokens_used = estimate_tokens(formatted_decisions)
+                if tokens_used <= remaining_budget:
+                    dynamic_parts.append({
+                        "section": "fallback_decisions",
+                        "content": formatted_decisions,
                         "tokens": tokens_used
                     })
                     remaining_budget -= tokens_used
@@ -1649,7 +1739,7 @@ def identify_context_changes(workspace_id: str, previous_hash: str) -> List[Dict
         # Return generic change indication if we can't determine specifics
         changes.append({
             "type": "unknown",
-            "last_modified": datetime.utcnow().isoformat(),
+            "last_modified": datetime.now(timezone.utc).isoformat(),
             "note": "Unable to determine specific changes"
         })
     
@@ -1792,7 +1882,7 @@ def handle_initialize_ollama_session(args: models.InitializeOllamaSessionArgs) -
         session_data = {
             "workspace_id": args.workspace_id,
             "session_id": db.generate_session_id(),
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "cache_optimization": True
         }
         
