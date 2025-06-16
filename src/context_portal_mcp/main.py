@@ -73,6 +73,80 @@ app = FastAPI(title="ConPort MCP Server Wrapper", version=CONPORT_VERSION)
 # --- Adapt and Register Tools with FastMCP ---
 # We use our Pydantic models as input_schema for robust validation.
 
+@conport_mcp.tool(name="get_cacheable_content", description="Identifies content suitable for caching based on priority and size.")
+async def tool_get_cacheable_content(
+    workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
+    ctx: Context
+) -> List[Dict[str, Any]]:
+    try:
+        pydantic_args = models.GetCacheableContentArgs(workspace_id=workspace_id)
+        return mcp_handlers.handle_get_cacheable_content(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_cacheable_content handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_cacheable_content: {e}. Args: workspace_id={workspace_id}")
+        raise exceptions.ContextPortalError(f"Server error processing get_cacheable_content: {type(e).__name__}")
+
+@conport_mcp.tool(name="build_stable_context_prefix", description="Build consistent, cacheable context prefix for Ollama KV-cache.")
+async def tool_build_stable_context_prefix(
+    workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
+    ctx: Context,
+    format_type: Annotated[str, Field(description="Format type for the stable prefix")] = "ollama_optimized"
+) -> Dict[str, Any]:
+    try:
+        pydantic_args = models.BuildStableContextPrefixArgs(
+            workspace_id=workspace_id,
+            format_type=format_type
+        )
+        return mcp_handlers.handle_build_stable_context_prefix(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in build_stable_context_prefix handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for build_stable_context_prefix: {e}. Args: workspace_id={workspace_id}")
+        raise exceptions.ContextPortalError(f"Server error processing build_stable_context_prefix: {type(e).__name__}")
+
+@conport_mcp.tool(name="get_cache_state", description="Check if stable context cache needs refresh.")
+async def tool_get_cache_state(
+    workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
+    ctx: Context,
+    current_prefix_hash: Annotated[Optional[str], Field(description="Current prefix hash to compare against")] = None
+) -> Dict[str, Any]:
+    try:
+        pydantic_args = models.GetCacheStateArgs(
+            workspace_id=workspace_id,
+            current_prefix_hash=current_prefix_hash
+        )
+        return mcp_handlers.handle_get_cache_state(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_cache_state handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_cache_state: {e}. Args: workspace_id={workspace_id}")
+        raise exceptions.ContextPortalError(f"Server error processing get_cache_state: {type(e).__name__}")
+
+@conport_mcp.tool(name="get_dynamic_context", description="Get query-specific context to append after stable prefix.")
+async def tool_get_dynamic_context(
+    workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
+    query_intent: Annotated[str, Field(min_length=1, description="The query intent to determine relevant context")],
+    ctx: Context,
+    context_budget: Annotated[int, Field(gt=0, description="Maximum tokens to use for dynamic context")] = 2000
+) -> Dict[str, Any]:
+    try:
+        pydantic_args = models.GetDynamicContextArgs(
+            workspace_id=workspace_id,
+            query_intent=query_intent,
+            context_budget=context_budget
+        )
+        return mcp_handlers.handle_get_dynamic_context(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_dynamic_context handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_dynamic_context: {e}. Args: workspace_id={workspace_id}")
+        raise exceptions.ContextPortalError(f"Server error processing get_dynamic_context: {type(e).__name__}")
+
 @conport_mcp.tool(name="get_product_context", description="Retrieves the overall project goals, features, and architecture.")
 async def tool_get_product_context(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
@@ -389,20 +463,49 @@ async def tool_get_system_patterns(
         log.error(f"Error processing args for get_system_patterns: {e}. Args: workspace_id={workspace_id}, tags_all={tags_filter_include_all}, tags_any={tags_filter_include_any}")
         raise exceptions.ContextPortalError(f"Server error processing get_system_patterns: {type(e).__name__}")
 
+@conport_mcp.tool(name="log_custom_data_with_cache_hint", description="Enhanced custom data logging with cache optimization suggestions and automatic cache scoring.")
+async def tool_log_custom_data_with_cache_hint(
+    workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
+    category: Annotated[str, Field(min_length=1, description="Category for the custom data")],
+    key: Annotated[str, Field(min_length=1, description="Key for the custom data (unique within category)")],
+    value: Annotated[Any, Field(description="The custom data value (JSON serializable)")],
+    ctx: Context,
+    suggest_caching: Annotated[Optional[bool], Field(description="Optional flag to enable cache suggestion logic")] = None,
+    cache_hint: Annotated[Optional[bool], Field(description="Explicit cache hint - true to mark for caching, false to exclude from caching")] = None
+) -> Dict[str, Any]:
+    try:
+        pydantic_args = models.LogCustomDataWithCacheHintArgs(
+            workspace_id=workspace_id,
+            category=category,
+            key=key,
+            value=value,
+            suggest_caching=suggest_caching,
+            cache_hint=cache_hint
+        )
+        return mcp_handlers.handle_log_custom_data_with_cache_hint(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in log_custom_data_with_cache_hint handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for log_custom_data_with_cache_hint: {e}. Args: workspace_id={workspace_id}, category='{category}', key='{key}'")
+        raise exceptions.ContextPortalError(f"Server error processing log_custom_data_with_cache_hint: {type(e).__name__}")
+
 @conport_mcp.tool(name="log_custom_data", description="Stores/updates a custom key-value entry under a category. Value is JSON-serializable.")
 async def tool_log_custom_data(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
     category: Annotated[str, Field(min_length=1, description="Category for the custom data")],
     key: Annotated[str, Field(min_length=1, description="Key for the custom data (unique within category)")],
     value: Annotated[Any, Field(description="The custom data value (JSON serializable)")],
-    ctx: Context
+    ctx: Context,
+    metadata: Annotated[Optional[Dict[str, Any]], Field(description="Cache hints and other metadata")] = None
 ) -> Dict[str, Any]:
     try:
         pydantic_args = models.LogCustomDataArgs(
             workspace_id=workspace_id,
             category=category,
             key=key,
-            value=value
+            value=value,
+            metadata=metadata
         )
         return mcp_handlers.handle_log_custom_data(pydantic_args)
     except exceptions.ContextPortalError as e:
@@ -453,6 +556,7 @@ async def tool_delete_custom_data(
     except Exception as e:
         log.error(f"Error processing args for delete_custom_data: {e}. Args: workspace_id={workspace_id}, category='{category}', key='{key}'")
         raise exceptions.ContextPortalError(f"Server error processing delete_custom_data: {type(e).__name__}")
+
 @conport_mcp.tool(name="search_project_glossary_fts", description="Full-text search within the 'ProjectGlossary' custom data category.")
 async def tool_search_project_glossary_fts(
     workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
@@ -751,6 +855,40 @@ async def tool_semantic_search_conport(
         log.error(f"Unexpected error processing args for semantic_search_conport: {e}. Args: workspace_id={workspace_id}, query_text='{query_text}'")
         raise exceptions.ContextPortalError(f"Server error processing semantic_search_conport: {type(e).__name__} - {e}")
 
+@conport_mcp.tool(name="initialize_ollama_session", description="Initialize ConPort session optimized for Ollama KV-cache.")
+async def tool_initialize_ollama_session(
+    workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
+    ctx: Context
+) -> Dict[str, Any]:
+    try:
+        pydantic_args = models.InitializeOllamaSessionArgs(workspace_id=workspace_id)
+        return mcp_handlers.handle_initialize_ollama_session(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in initialize_ollama_session handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for initialize_ollama_session: {e}. Args: workspace_id={workspace_id}")
+        raise exceptions.ContextPortalError(f"Server error processing initialize_ollama_session: {type(e).__name__}")
+
+@conport_mcp.tool(name="get_cache_performance", description="Monitor Ollama cache optimization performance.")
+async def tool_get_cache_performance(
+    workspace_id: Annotated[str, Field(description="Identifier for the workspace (e.g., absolute path)")],
+    ctx: Context,
+    session_id: Annotated[Optional[str], Field(description="Optional session ID to filter performance metrics")] = None
+) -> Dict[str, Any]:
+    try:
+        pydantic_args = models.GetCachePerformanceArgs(
+            workspace_id=workspace_id,
+            session_id=session_id
+        )
+        return mcp_handlers.handle_get_cache_performance(pydantic_args)
+    except exceptions.ContextPortalError as e:
+        log.error(f"Error in get_cache_performance handler: {e}")
+        raise
+    except Exception as e:
+        log.error(f"Error processing args for get_cache_performance: {e}. Args: workspace_id={workspace_id}")
+        raise exceptions.ContextPortalError(f"Server error processing get_cache_performance: {type(e).__name__}")
+
 # Mount the FastMCP SSE app to the FastAPI app at the /mcp path
 # This will handle GET for SSE and POST for JSON-RPC client requests
 app.mount("/mcp", conport_mcp.sse_app())
@@ -760,7 +898,6 @@ log.info("Mounted FastMCP app at /mcp")
 @app.get("/")
 async def read_root():
     return {"message": "ConPort MCP Server is running. MCP endpoint at /mcp"}
-
 
 # Determine the absolute path to the root of the ConPort server project
 # Assumes this script (main.py) is at src/context_portal_mcp/main.py
@@ -865,7 +1002,7 @@ def main_logic(sys_args=None):
             # from src.context_portal_mcp.core.config import get_database_path # Import happens at module level
             # Call the provisioning function at server startup
             ensure_alembic_files_exist(Path(effective_workspace_id))
-            # get_database_path(effective_workspace_id) # EARLY VALIDATION REMOVED - Path validation and dir creation will occur on first DB access.
+            # get_database_path(effective_workspace_id) # EARLY VALIDATION REMOVED - Path validation and dir creation will occur on first DB use.
 
             if not effective_workspace_id or not os.path.isdir(effective_workspace_id): # Basic check if path is a directory
                  log.error(f"STDIO mode: effective_workspace_id ('{effective_workspace_id}') is not a valid directory. Please ensure client provides a correct absolute path or sets 'cwd' appropriately if using '${{workspaceFolder}}'.")

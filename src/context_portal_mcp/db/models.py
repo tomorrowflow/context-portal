@@ -53,6 +53,8 @@ class CustomData(BaseModel):
     category: str
     key: str
     value: Any # Store arbitrary JSON data (SQLAlchemy handles JSON str conversion for DB)
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Cache hints and other metadata")
+    cache_score: Optional[int] = Field(None, description="Cache optimization scoring")
 
 # --- Context History Models ---
 
@@ -144,7 +146,6 @@ class LogProgressArgs(BaseArgs):
     # Default relationship type for progress links, can be made configurable if needed
     link_relationship_type: str = Field("relates_to_progress", description="Relationship type for the automatic link, defaults to 'relates_to_progress'")
 
-
     @model_validator(mode='before')
     @classmethod
     def check_linked_item_fields(cls, values: Dict[str, Any]) -> Dict[str, Any]:
@@ -212,6 +213,7 @@ class LogCustomDataArgs(BaseArgs):
     category: str = Field(..., min_length=1, description="Category for the custom data")
     key: str = Field(..., min_length=1, description="Key for the custom data (unique within category)")
     value: Any = Field(..., description="The custom data value (JSON serializable)")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Cache hints and other metadata")
 
 class GetCustomDataArgs(BaseArgs):
     """Arguments for retrieving custom data."""
@@ -233,6 +235,14 @@ class SearchProjectGlossaryArgs(BaseArgs):
     """Arguments for searching the ProjectGlossary using FTS."""
     query_term: str = Field(..., min_length=1, description="The term to search for in the glossary.")
     limit: Optional[int] = Field(10, gt=0, description="Maximum number of search results to return.")
+
+class LogCustomDataWithCacheHintArgs(BaseArgs):
+    """Arguments for enhanced custom data logging with cache optimization suggestions."""
+    category: str = Field(..., min_length=1, description="Category for the custom data")
+    key: str = Field(..., min_length=1, description="Key for the custom data (unique within category)")
+    value: Any = Field(..., description="The custom data value (JSON serializable)")
+    suggest_caching: Optional[bool] = Field(None, description="Optional flag to enable cache suggestion logic")
+    cache_hint: Optional[bool] = Field(None, description="Explicit cache hint - true to mark for caching, false to exclude from caching")
 
 # --- Export Tool ---
 
@@ -356,6 +366,46 @@ class SemanticSearchConportArgs(BaseArgs):
             raise ValueError("'filter_custom_data_categories' can only be used if 'custom_data' is included in 'filter_item_types'.")
         return values
 
+# --- New Model for Cacheable Content ---
+
+class GetCacheableContentArgs(BaseArgs):
+    """Arguments for identifying content suitable for Ollama KV-cache optimization."""
+    content_threshold: int = Field(default=1500, gt=0, description="Minimum content size in characters to be considered cacheable")
+
+class CacheableContentItem(BaseModel):
+    """Model for a cacheable content item."""
+    type: str = Field(..., description="Type of the content (e.g., 'product_context', 'system_pattern', 'custom_data')")
+    content: Any = Field(..., description="The content data")
+    priority: str = Field(..., description="Priority level ('high', 'medium', 'low')")
+    estimated_tokens: int = Field(..., gt=0, description="Estimated number of tokens in the content")
+    last_modified: Optional[datetime] = Field(None, description="When the content was last modified")
+    pattern_id: Optional[int] = Field(None, description="For system patterns, the pattern ID")
+    category: Optional[str] = Field(None, description="For custom data, the category")
+    key: Optional[str] = Field(None, description="For custom data, the key")
+
+# --- KV Cache Tool Models ---
+
+class BuildStableContextPrefixArgs(BaseArgs):
+    """Arguments for building stable context prefix for Ollama KV-cache."""
+    format_type: str = Field(default="ollama_optimized", description="Format type for the stable prefix")
+
+class GetCacheStateArgs(BaseArgs):
+    """Arguments for checking cache state."""
+    current_prefix_hash: Optional[str] = Field(None, description="Current prefix hash to compare against")
+
+class GetDynamicContextArgs(BaseArgs):
+    """Arguments for getting dynamic context to append after stable prefix."""
+    query_intent: str = Field(..., min_length=1, description="The query intent to determine relevant context")
+    context_budget: int = Field(default=2000, gt=0, description="Maximum tokens to use for dynamic context")
+
+class InitializeOllamaSessionArgs(BaseArgs):
+    """Arguments for initializing ConPort session optimized for Ollama KV-cache."""
+    pass  # Only workspace_id is required
+
+class GetCachePerformanceArgs(BaseArgs):
+    """Arguments for monitoring Ollama cache optimization performance."""
+    session_id: Optional[str] = Field(None, description="Optional session ID to filter performance metrics")
+
 # Dictionary mapping tool names to their expected argument models (for potential future use/validation)
 # Note: The primary validation happens in the handler using these models.
 TOOL_ARG_MODELS = {
@@ -388,4 +438,11 @@ TOOL_ARG_MODELS = {
     "semantic_search_conport": SemanticSearchConportArgs, # New tool
     "update_progress": UpdateProgressArgs, # New tool
     "delete_progress_by_id": DeleteProgressByIdArgs, # New tool
+    "get_cacheable_content": GetCacheableContentArgs, # New tool for KV-cache optimization
+    "build_stable_context_prefix": BuildStableContextPrefixArgs, # KV cache tool
+    "get_cache_state": GetCacheStateArgs, # KV cache tool
+    "get_dynamic_context": GetDynamicContextArgs, # KV cache tool
+    "log_custom_data_with_cache_hint": LogCustomDataWithCacheHintArgs, # Enhanced custom data logging
+    "initialize_ollama_session": InitializeOllamaSessionArgs, # Session management tool
+    "get_cache_performance": GetCachePerformanceArgs # Performance monitoring tool
 }

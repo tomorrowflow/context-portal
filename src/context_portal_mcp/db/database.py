@@ -3,6 +3,7 @@
 import sqlite3
 import json
 import os
+import uuid
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
@@ -17,7 +18,7 @@ from . import models # Import models from the same directory
 import shutil # For copying directories
 import inspect # For getting the current file's path to find templates
 
-log = logging.getLogger(__name__) # Get a logger for this module
+log = logging.getLogger(__name__)
 
 # --- Connection Handling ---
 
@@ -30,7 +31,7 @@ def get_db_connection(workspace_id: str) -> sqlite3.Connection:
         return _connections[workspace_id]
 
     db_path = get_database_path(workspace_id)
-    
+
     # Run migrations before connecting to ensure schema is up-to-date
     # This will create the database file if it doesn't exist
     run_migrations(db_path, Path(workspace_id))
@@ -113,7 +114,7 @@ def run_migrations(db_path: Path, project_root_dir: Path):
     """
     # Ensure Alembic files exist before attempting to run migrations
     ensure_alembic_files_exist(project_root_dir)
-    
+
     # Construct the absolute path to alembic.ini and the scripts directory
     # using the provided project_root_dir
     alembic_ini_path = project_root_dir / Path("alembic.ini")
@@ -124,7 +125,7 @@ def run_migrations(db_path: Path, project_root_dir: Path):
     log.debug(f"Alembic: Initializing Config with alembic_ini_path = {alembic_ini_path.resolve()}")
     log.debug(f"Alembic: Setting script_location to alembic_scripts_path = {alembic_scripts_path.resolve()}")
     alembic_cfg = Config(str(alembic_ini_path))
-    
+
     # Explicitly set the script location as a main option.
     # This is often more robust than relying on the .ini file or cmd_opts for this specific setting.
     alembic_cfg.set_main_option("script_location", str(alembic_scripts_path))
@@ -158,8 +159,6 @@ def run_migrations(db_path: Path, project_root_dir: Path):
     except Exception as e:
         log.error(f"Alembic migration failed for {db_path}: {e}", exc_info=True)
         raise DatabaseError(f"Database migration failed: {e}")
-
-
 
 # --- Helper functions for history ---
 
@@ -195,7 +194,6 @@ def _add_context_history_entry(
     except sqlite3.Error as e:
         # This error should be handled by the calling function's rollback
         raise DatabaseError(f"Failed to add entry to {history_table_name}: {e}")
-
 
 # --- CRUD Operations ---
 
@@ -263,7 +261,7 @@ def update_product_context(workspace_id: str, update_args: models.UpdateContextA
         # Update the main product_context table
         new_content_json = json.dumps(new_final_content)
         cursor.execute("UPDATE product_context SET content = ? WHERE id = 1", (new_content_json,))
-        
+
         conn.commit()
         # No need to check rowcount here as history is logged regardless of content identity
     except (sqlite3.Error, TypeError, json.JSONDecodeError, DatabaseError) as e: # Added DatabaseError
@@ -272,6 +270,7 @@ def update_product_context(workspace_id: str, update_args: models.UpdateContextA
     finally:
         if cursor:
             cursor.close()
+
 def get_active_context(workspace_id: str) -> models.ActiveContext:
     """Retrieves the active context."""
     conn = get_db_connection(workspace_id)
@@ -334,7 +333,7 @@ def update_active_context(workspace_id: str, update_args: models.UpdateContextAr
         # Update the main active_context table
         new_content_json = json.dumps(new_final_content)
         cursor.execute("UPDATE active_context SET content = ? WHERE id = 1", (new_content_json,))
-        
+
         conn.commit()
     except (sqlite3.Error, TypeError, json.JSONDecodeError, DatabaseError) as e: # Added DatabaseError
         conn.rollback()
@@ -343,8 +342,7 @@ def update_active_context(workspace_id: str, update_args: models.UpdateContextAr
         if cursor:
             cursor.close()
 
-# --- Add more CRUD functions for other models (ActiveContext, Decision, etc.) ---
-# Example: log_decision
+# --- Add more CRUD functions for other models (ActiveContext, Decision, etc.) --- # Example: log_decision
 def log_decision(workspace_id: str, decision_data: models.Decision) -> models.Decision:
     """Logs a new decision."""
     conn = get_db_connection(workspace_id)
@@ -386,7 +384,7 @@ def get_decisions(
     """Retrieves decisions, optionally limited, and filtered by tags."""
     conn = get_db_connection(workspace_id)
     cursor = None # Initialize cursor for finally block
-    
+
     base_sql = "SELECT id, timestamp, summary, rationale, implementation_details, tags FROM decisions"
     conditions = []
     params_list: List[Any] = []
@@ -397,7 +395,6 @@ def get_decisions(
         # A more robust way is to fetch and filter in Python, or use json_each if available and suitable.
         # For simplicity here, we'll filter in Python after fetching.
         # This means 'limit' will apply before this specific tag filter.
-        # A true SQL solution would be more complex, e.g., using json_tree or json_each and subqueries.
         pass # Will be handled post-query
 
     if tags_filter_include_any:
@@ -406,7 +403,7 @@ def get_decisions(
 
     # ORDER BY must come before LIMIT
     order_by_clause = " ORDER BY timestamp DESC"
-    
+
     limit_clause = ""
     if limit is not None and limit > 0:
         limit_clause = " LIMIT ?"
@@ -417,9 +414,9 @@ def get_decisions(
     sql = base_sql
     if conditions: # This block will not be hit with current Python-based tag filtering
         sql += " WHERE " + " AND ".join(conditions)
-    
+
     sql += order_by_clause + limit_clause
-    
+
     params_tuple = tuple(params_list)
 
     try:
@@ -442,7 +439,7 @@ def get_decisions(
             decisions = [
                 d for d in decisions if d.tags and all(tag in d.tags for tag in tags_filter_include_all)
             ]
-        
+
         if tags_filter_include_any:
             decisions = [
                 d for d in decisions if d.tags and any(tag in d.tags for tag in tags_filter_include_any)
@@ -541,6 +538,7 @@ def log_progress(workspace_id: str, progress_data: models.ProgressEntry) -> mode
     finally:
         if cursor:
             cursor.close()
+
 def get_progress(
     workspace_id: str,
     status_filter: Optional[str] = None,
@@ -601,7 +599,7 @@ def update_progress_entry(workspace_id: str, update_args: models.UpdateProgressA
     """
     conn = get_db_connection(workspace_id)
     cursor = None # Initialize cursor for finally block
-    
+
     sql = "UPDATE progress_entries SET"
     updates = []
     params_list: List[Any] = []
@@ -662,6 +660,7 @@ def delete_progress_entry_by_id(workspace_id: str, progress_id: int) -> bool:
     finally:
         if cursor:
             cursor.close()
+
 def log_system_pattern(workspace_id: str, pattern_data: models.SystemPattern) -> models.SystemPattern:
     """Logs or updates a system pattern. Uses INSERT OR REPLACE based on unique name."""
     conn = get_db_connection(workspace_id)
@@ -709,7 +708,7 @@ def get_system_patterns(
     """Retrieves system patterns, optionally filtered by tags."""
     conn = get_db_connection(workspace_id)
     cursor = None # Initialize cursor for finally block
-    
+
     base_sql = "SELECT id, timestamp, name, description, tags FROM system_patterns"
     order_by_clause = " ORDER BY name ASC"
     # params_list: List[Any] = [] # Not used for SQL filtering of tags for now
@@ -740,7 +739,7 @@ def get_system_patterns(
             patterns = [
                 p for p in patterns if p.tags and all(tag in p.tags for tag in tags_filter_include_all)
             ]
-        
+
         if tags_filter_include_any:
             patterns = [
                 p for p in patterns if p.tags and any(tag in p.tags for tag in tags_filter_include_any)
@@ -776,18 +775,22 @@ def log_custom_data(workspace_id: str, data: models.CustomData) -> models.Custom
     conn = get_db_connection(workspace_id)
     cursor = None # Initialize cursor for finally block
     sql = """
-        INSERT OR REPLACE INTO custom_data (timestamp, category, key, value)
-        VALUES (?, ?, ?, ?)
+        INSERT OR REPLACE INTO custom_data (timestamp, category, key, value, metadata, cache_score)
+        VALUES (?, ?, ?, ?, ?, ?)
     """
     try:
         cursor = conn.cursor()
         # Ensure value is serialized to JSON string
         value_json = json.dumps(data.value)
+        # Serialize metadata to JSON string if present
+        metadata_json = json.dumps(data.metadata) if data.metadata is not None else None
         params = (
             data.timestamp,
             data.category,
             data.key,
-            value_json
+            value_json,
+            metadata_json,
+            data.cache_score
         )
         cursor.execute(sql, params)
         conn.commit()
@@ -815,7 +818,7 @@ def get_custom_data(
 
     conn = get_db_connection(workspace_id)
     cursor = None # Initialize cursor for finally block
-    sql = "SELECT id, timestamp, category, key, value FROM custom_data"
+    sql = "SELECT id, timestamp, category, key, value, metadata, cache_score FROM custom_data"
     conditions = []
     params_list = []
 
@@ -841,13 +844,17 @@ def get_custom_data(
             try:
                 # Deserialize value from JSON string
                 value_data = json.loads(row['value'])
+                # Deserialize metadata from JSON string if present
+                metadata_data = json.loads(row['metadata']) if row['metadata'] else None
                 custom_data_list.append(
                     models.CustomData(
                         id=row['id'],
                         timestamp=row['timestamp'],
                         category=row['category'],
                         key=row['key'],
-                        value=value_data
+                        value=value_data,
+                        metadata=metadata_data,
+                        cache_score=row['cache_score']
                     )
                 )
             except json.JSONDecodeError as e:
@@ -934,7 +941,7 @@ def get_context_links(
     """
     conn = get_db_connection(workspace_id)
     cursor = None # Initialize cursor for finally block
-    
+
     # Ensure item_id is treated as string for consistent querying with TEXT columns
     str_item_id = str(item_id)
 
@@ -951,7 +958,7 @@ def get_context_links(
         "((source_item_type = ? AND source_item_id = ?) OR (target_item_type = ? AND target_item_id = ?))"
     )
     params_list.extend([item_type, str_item_id, item_type, str_item_id])
-    
+
     # Add workspace_id filter for safety, though connection is already workspace-specific
     conditions.append("workspace_id = ?")
     params_list.append(workspace_id)
@@ -959,7 +966,7 @@ def get_context_links(
     if relationship_type_filter:
         conditions.append("relationship_type = ?")
         params_list.append(relationship_type_filter)
-    
+
     if linked_item_type_filter:
         # This filter applies to the "other end" of the link
         conditions.append(
@@ -979,10 +986,11 @@ def get_context_links(
     if limit is not None and limit > 0:
         sql += " LIMIT ?"
         params_list.append(limit)
-    
+
     params = tuple(params_list)
 
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, params)
         rows = cursor.fetchall()
         links = [
@@ -1011,7 +1019,7 @@ def search_project_glossary_fts(workspace_id: str, query_term: str, limit: Optio
     cursor = None # Initialize cursor for finally block
     # Updated to use the new general custom_data_fts table structure
     sql = """
-        SELECT cd.id, cd.category, cd.key, cd.value
+        SELECT cd.id, cd.timestamp, cd.category, cd.key, cd.value, cd.metadata, cd.cache_score
         FROM custom_data_fts fts
         JOIN custom_data cd ON fts.rowid = cd.id
         WHERE fts.custom_data_fts MATCH ? AND fts.category = 'ProjectGlossary'
@@ -1034,12 +1042,16 @@ def search_project_glossary_fts(workspace_id: str, query_term: str, limit: Optio
         for row in rows:
             try:
                 value_data = json.loads(row['value'])
+                metadata_data = json.loads(row['metadata']) if row['metadata'] else None
                 glossary_entries.append(
                     models.CustomData(
                         id=row['id'],
+                        timestamp=row['timestamp'],
                         category=row['category'],
                         key=row['key'],
-                        value=value_data
+                        value=value_data,
+                        metadata=metadata_data,
+                        cache_score=row['cache_score']
                     )
                 )
             except json.JSONDecodeError as e:
@@ -1063,9 +1075,9 @@ def search_custom_data_value_fts(
        Optionally filters by category after FTS."""
     conn = get_db_connection(workspace_id)
     cursor = None # Initialize cursor for finally block
-    
+
     sql = """
-        SELECT cd.id, cd.timestamp, cd.category, cd.key, cd.value
+        SELECT cd.id, cd.timestamp, cd.category, cd.key, cd.value, cd.metadata, cd.cache_score
         FROM custom_data_fts fts
         JOIN custom_data cd ON fts.rowid = cd.id
         WHERE fts.custom_data_fts MATCH ?
@@ -1075,7 +1087,7 @@ def search_custom_data_value_fts(
     if category_filter:
         sql += " AND fts.category = ?" # Filter by category on the FTS table
         params_list.append(category_filter)
-        
+
     sql += " ORDER BY rank"
 
     if limit is not None and limit > 0:
@@ -1089,15 +1101,17 @@ def search_custom_data_value_fts(
         results = []
         for row in rows:
             try:
-                cursor = conn.cursor()
                 value_data = json.loads(row['value'])
+                metadata_data = json.loads(row['metadata']) if row['metadata'] else None
                 results.append(
                     models.CustomData(
                         id=row['id'],
                         timestamp=row['timestamp'],
                         category=row['category'],
                         key=row['key'],
-                        value=value_data
+                        value=value_data,
+                        metadata=metadata_data,
+                        cache_score=row['cache_score']
                     )
                 )
             except json.JSONDecodeError as e:
@@ -1141,7 +1155,7 @@ def get_item_history(
     if args.after_timestamp:
         conditions.append("timestamp > ?")
         params_list.append(args.after_timestamp)
-    
+
     # Add workspace_id filter if it were part of the history table (it's not currently)
     # conditions.append("workspace_id = ?")
     # params_list.append(workspace_id)
@@ -1158,6 +1172,7 @@ def get_item_history(
     params = tuple(params_list)
 
     try:
+        cursor = conn.cursor()
         cursor.execute(sql, params)
         rows = cursor.fetchall()
         history_entries = []
@@ -1179,13 +1194,11 @@ def get_item_history(
         if cursor:
             cursor.close()
 
-# --- Recent Activity Summary ---
-
 def get_recent_activity_summary_data(
-workspace_id: str,
-hours_ago: Optional[int] = None,
-since_timestamp: Optional[datetime] = None,
-limit_per_type: int = 5
+    workspace_id: str,
+    hours_ago: Optional[int] = None,
+    since_timestamp: Optional[datetime] = None,
+    limit_per_type: int = 5
 ) -> Dict[str, Any]:
     """
     Retrieves a summary of recent activity across various ConPort items.
@@ -1280,7 +1293,7 @@ limit_per_type: int = 5
                 content=json.loads(row['content']), change_source=row['change_source']
             ).model_dump(mode='json') for row in rows
         ]
-        
+
         # Recent Links Created
         cursor.execute(
             """
@@ -1328,6 +1341,189 @@ limit_per_type: int = 5
     finally:
         if cursor:
             cursor.close()
+
+def get_custom_data_with_cache_hints(workspace_id: str) -> List[models.CustomData]:
+    """Query custom data with cache_hint metadata"""
+    conn = get_db_connection(workspace_id)
+    cursor = None
+    sql = """
+    SELECT id, timestamp, category, key, value, metadata, cache_score
+    FROM custom_data
+    WHERE JSON_EXTRACT(metadata, '$.cache_hint') = true
+    """
+    try:
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        return [
+            models.CustomData(
+                id=row['id'],
+                timestamp=row['timestamp'],
+                category=row['category'],
+                key=row['key'],
+                value=json.loads(row['value']),
+                metadata=json.loads(row['metadata']) if row['metadata'] else None,
+                cache_score=row['cache_score']
+            )
+            for row in cursor.fetchall()
+        ]
+    except sqlite3.Error as e:
+        raise DatabaseError(f"Failed to retrieve custom data with cache hints: {e}")
+    finally:
+        if cursor:
+            cursor.close()
+
+def get_product_context_data(workspace_id: str) -> Dict[str, Any]:
+    """Get product context data for KV cache operations"""
+    try:
+        context_model = get_product_context(workspace_id)
+        return context_model.content
+    except DatabaseError:
+        return {}
+
+def get_system_patterns_data(workspace_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Get system patterns data for KV cache operations"""
+    try:
+        patterns = get_system_patterns(workspace_id)
+        if limit:
+            patterns = patterns[:limit]
+        return [
+            {
+                "id": pattern.id,
+                "name": pattern.name,
+                "description": pattern.description,
+                "tags": pattern.tags,
+                "timestamp": pattern.timestamp
+            }
+            for pattern in patterns
+        ]
+    except DatabaseError:
+        return []
+
+def get_active_context_data(workspace_id: str) -> Dict[str, Any]:
+    """Get active context data for KV cache operations"""
+    try:
+        context_model = get_active_context(workspace_id)
+        return context_model.content
+    except DatabaseError:
+        return {}
+
+def get_decisions_data(workspace_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Get decisions data for KV cache operations"""
+    try:
+        decisions = get_decisions(workspace_id, limit=limit)
+        return [
+            {
+                "id": decision.id,
+                "summary": decision.summary,
+                "rationale": decision.rationale,
+                "implementation_details": decision.implementation_details,
+                "tags": decision.tags,
+                "timestamp": decision.timestamp
+            }
+            for decision in decisions
+        ]
+    except DatabaseError:
+        return []
+
+def get_progress_data(workspace_id: str, status_filter: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Get progress data for KV cache operations"""
+    try:
+        progress_entries = get_progress(workspace_id, status_filter=status_filter, limit=limit)
+        return [
+            {
+                "id": entry.id,
+                "status": entry.status,
+                "description": entry.description,
+                "parent_id": entry.parent_id,
+                "timestamp": entry.timestamp
+            }
+            for entry in progress_entries
+        ]
+    except DatabaseError:
+        return []
+
+def get_last_modified_time(item_type: str, workspace_id: str) -> datetime:
+    """Get last modification time for different item types"""
+    conn = get_db_connection(workspace_id)
+    cursor = None
+    
+    try:
+        cursor = conn.cursor()
+        
+        if item_type == "product_context":
+            # Get the most recent update from product_context_history
+            cursor.execute(
+                "SELECT MAX(timestamp) FROM product_context_history"
+            )
+        elif item_type == "system_patterns":
+            # Get the most recent system pattern timestamp
+            cursor.execute(
+                "SELECT MAX(timestamp) FROM system_patterns"
+            )
+        elif item_type == "custom_data_cached":
+            # Get the most recent custom data with cache hints
+            cursor.execute(
+                """SELECT MAX(timestamp) FROM custom_data
+                   WHERE JSON_EXTRACT(metadata, '$.cache_hint') = true"""
+            )
+        else:
+            # Default fallback - return epoch time
+            return datetime.fromtimestamp(0)
+        
+        row = cursor.fetchone()
+        if row and row[0]:
+            return row[0] if isinstance(row[0], datetime) else datetime.fromisoformat(row[0])
+        else:
+            # Return epoch time if no records found
+            return datetime.fromtimestamp(0)
+            
+    except sqlite3.Error as e:
+        log.error(f"Failed to get last modified time for {item_type}: {e}")
+        # Return epoch time on error
+        return datetime.fromtimestamp(0)
+    finally:
+        if cursor:
+            cursor.close()
+
+def get_hash_timestamp(hash_value: str) -> datetime:
+    """Extract timestamp from hash (placeholder implementation)"""
+    # This is a placeholder implementation since the hash doesn't contain timestamp info
+    # In a real implementation, you might store hash creation timestamps separately
+    # or encode timestamp information in the hash itself
+    
+    # For now, return current time minus a small offset to simulate "previous" time
+    return datetime.utcnow() - timedelta(minutes=1)
+
+def store_session_state(session_data: Dict[str, Any]) -> None:
+    """Store session state (simple implementation)"""
+    # Simple implementation - could be enhanced to use a dedicated session table
+    # For now, we'll store it as custom data with a special category
+    try:
+        workspace_id = session_data.get("workspace_id")
+        session_id = session_data.get("session_id")
+        
+        if not workspace_id or not session_id:
+            log.warning("Cannot store session state: missing workspace_id or session_id")
+            return
+            
+        # Store session data as custom data
+        session_custom_data = models.CustomData(
+            category="__session_state__",
+            key=session_id,
+            value=session_data,
+            metadata={"session": True, "created_at": datetime.utcnow().isoformat()},
+            cache_score=0  # Session data doesn't need caching
+        )
+        
+        log_custom_data(workspace_id, session_custom_data)
+        log.info(f"Stored session state for session_id: {session_id}")
+        
+    except Exception as e:
+        log.error(f"Failed to store session state: {e}")
+
+def generate_session_id() -> str:
+    """Generate unique session ID using UUID"""
+    return str(uuid.uuid4())
 
 # (All planned CRUD functions implemented)
 

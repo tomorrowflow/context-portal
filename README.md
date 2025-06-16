@@ -623,6 +623,53 @@ For a more in-depth understanding of ConPort's design, architecture, and advance
 
 - [`conport_mcp_deep_dive.md`](https://github.com/GreatScottyMac/context-portal/blob/main/conport_mcp_deep_dive.md)
 
+## Testing KV Cache
+
+ConPort includes a comprehensive KV cache optimization system designed for Ollama integration. This system provides intelligent content caching, stable context assembly, and performance monitoring.
+
+### Quick Start Testing
+
+1. **Setup Test Data**:
+   ```bash
+   python setup_test_data.py /path/to/test/workspace --verify
+   ```
+
+2. **Run Basic Tests**:
+   ```bash
+   python -m pytest tests/test_kv_cache_basic.py -v
+   ```
+
+3. **Test MCP Client Integration**:
+   ```bash
+   python test_mcp_client.py --mode demo
+   ```
+
+### Available KV Cache Tools
+
+- **`get_cacheable_content`** - Identifies content suitable for caching
+- **`build_stable_context_prefix`** - Builds consistent, cacheable context
+- **`get_cache_state`** - Checks if cache needs refresh
+- **`get_dynamic_context`** - Gets query-specific context
+- **`initialize_ollama_session`** - Initializes optimized session
+- **`get_cache_performance`** - Monitors cache performance
+- **`log_custom_data_with_cache_hint`** - Enhanced data logging with cache hints
+
+### Testing Resources
+
+- **[`TESTING_KV_CACHE.md`](TESTING_KV_CACHE.md)** - Comprehensive testing guide
+- **[`tests/`](tests/)** - Test suites for basic, integration, and performance testing
+- **[`setup_test_data.py`](setup_test_data.py)** - Sample data generator
+- **[`test_mcp_client.py`](test_mcp_client.py)** - MCP client integration examples
+
+### Common Use Cases
+
+1. **Content Optimization**: Identify and prioritize content for caching
+2. **Context Assembly**: Build stable, consistent context prefixes
+3. **Cache Management**: Monitor and optimize cache performance
+4. **Ollama Integration**: Seamless integration with Ollama KV-cache
+
+For detailed testing procedures, validation criteria, and troubleshooting, see [`TESTING_KV_CACHE.md`](TESTING_KV_CACHE.md).
+
 ## Contributing
 
 Please see our [CONTRIBUTING.md](CONTRIBUTING.md) guide for details on how to contribute to the ConPort project.

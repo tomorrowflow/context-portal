@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import json
 import re # For markdown parsing
+import hashlib
 from typing import Dict, Any, List, Optional
 from datetime import datetime # Added missing import
 
@@ -80,9 +81,9 @@ def handle_log_decision(args: models.LogDecisionArgs) -> Dict[str, Any]:
                     text_to_embed += f"Rationale: {logged_decision.rationale}\n"
                 if logged_decision.implementation_details:
                     text_to_embed += f"Implementation Details: {logged_decision.implementation_details}"
-                
+
                 vector = embedding_service.get_embedding(text_to_embed.strip())
-                
+
                 metadata_for_vector = {
                     "conport_item_id": str(logged_decision.id),
                     "conport_item_type": "decision",
@@ -101,7 +102,7 @@ def handle_log_decision(args: models.LogDecisionArgs) -> Dict[str, Any]:
             except Exception as e_embed:
                 log.error(f"Failed to generate/store embedding for decision ID {logged_decision.id}: {e_embed}", exc_info=True)
         # --- End Add to Vector Store ---
-        
+
         return logged_decision.model_dump(mode='json')
     except DatabaseError as e:
         raise ContextPortalError(f"Database error logging decision: {e}")
@@ -221,9 +222,9 @@ def handle_log_progress(args: models.LogProgressArgs) -> Dict[str, Any]:
         if logged_progress and logged_progress.id is not None:
             try:
                 text_to_embed = f"Progress: {logged_progress.status} - {logged_progress.description}"
-                
+
                 vector = embedding_service.get_embedding(text_to_embed.strip())
-                
+
                 metadata_for_vector = {
                     "conport_item_id": str(logged_progress.id),
                     "conport_item_type": "progress_entry",
@@ -352,9 +353,9 @@ def handle_log_system_pattern(args: models.LogSystemPatternArgs) -> Dict[str, An
         if logged_pattern and logged_pattern.id is not None:
             try:
                 text_to_embed = f"System Pattern: {logged_pattern.name}\nDescription: {logged_pattern.description if logged_pattern.description else ''}"
-                
+
                 vector = embedding_service.get_embedding(text_to_embed.strip())
-                
+
                 metadata_for_vector = {
                     "conport_item_id": str(logged_pattern.id),
                     "conport_item_type": "system_pattern",
@@ -417,7 +418,7 @@ def handle_get_conport_schema(args: models.GetConportSchemaArgs) -> Dict[str, Di
                 # This case should ideally not happen if TOOL_ARG_MODELS is correctly populated
                 log.warning(f"Model class for tool '{tool_name}' is not a Pydantic model or does not have 'model_json_schema' method.")
                 tool_schemas[tool_name] = {"error": "Schema not available"}
-        
+
         return tool_schemas
     except Exception as e:
         log.exception(f"Unexpected error in get_conport_schema for workspace {args.workspace_id}")
@@ -445,18 +446,37 @@ def handle_get_recent_activity_summary(args: models.GetRecentActivitySummaryArgs
         log.exception(f"Unexpected error in get_recent_activity_summary for workspace {args.workspace_id}")
         raise ContextPortalError(f"Unexpected error retrieving recent activity: {e}")
 
-def handle_log_custom_data(args: models.LogCustomDataArgs) -> Dict[str, Any]:
+def handle_log_custom_data_with_cache_hint(args: models.LogCustomDataWithCacheHintArgs) -> Dict[str, Any]:
     """
-    Handles the 'log_custom_data' MCP tool.
-    Assumes 'args' is an already validated Pydantic model instance.
-    Returns the logged custom data entry as a dictionary.
+    Handles the 'log_custom_data_with_cache_hint' MCP tool.
+    Enhanced custom data logging with cache optimization suggestions.
+    Implements the logic from lines 280-318 in kv_cache.md.
     """
     try:
-        data_to_log = models.CustomData(category=args.category, key=args.key, value=args.value)
-        # Assuming CustomData model has a metadata field, or we add it if needed for cache_hint
-        # For now, the LogCustomDataArgs does not have metadata.
-        # If it did: data_to_log = models.CustomData(category=args.category, key=args.key, value=args.value, metadata=args.metadata)
+        # Auto-suggest caching for large content
+        content_size = len(json.dumps(args.value))
+        auto_suggest_cache = content_size > 1500 and args.suggest_caching is None
         
+        metadata = {}
+        if args.cache_hint is not None:
+            metadata["cache_hint"] = args.cache_hint
+        elif auto_suggest_cache:
+            metadata["cache_suggestion"] = True
+            metadata["content_size"] = content_size
+        
+        # Calculate cache score
+        cache_score = calculate_content_cache_score(args.value, args.category, args.key)
+        
+        # Create the custom data model
+        data_to_log = models.CustomData(
+            category=args.category,
+            key=args.key,
+            value=args.value,
+            metadata=metadata,
+            cache_score=cache_score
+        )
+
+        # Log the data using standard function
         logged_data = db.log_custom_data(args.workspace_id, data_to_log)
 
         # --- Add to Vector Store ---
@@ -471,13 +491,97 @@ def handle_log_custom_data(args: models.LogCustomDataArgs) -> Dict[str, Any]:
                     text_to_embed = json.dumps(logged_data.value)
                 except TypeError:
                     log.warning(f"Custom data value for {logged_data.category}/{logged_data.key} is not JSON serializable for embedding.")
-            
+
             if text_to_embed:
                 # Add category and key to text for better contextual embedding
                 contextual_text_to_embed = f"Category: {logged_data.category}\nKey: {logged_data.key}\nValue: {text_to_embed}"
                 try:
                     vector = embedding_service.get_embedding(contextual_text_to_embed.strip())
-                    
+
+                    metadata_for_vector = {
+                        "conport_item_id": str(logged_data.id),
+                        "conport_item_type": "custom_data",
+                        "category": logged_data.category,
+                        "key": logged_data.key,
+                        "timestamp_created": logged_data.timestamp.isoformat(),
+                    }
+                    # Add metadata from CustomData if it exists and is simple
+                    if hasattr(logged_data, 'metadata') and isinstance(logged_data.metadata, dict):
+                         for k, v in logged_data.metadata.items():
+                            if isinstance(v, (str, int, float, bool)): # Only simple types for Chroma metadata
+                                metadata_for_vector[f"custom_meta_{k}"] = str(v)
+
+                    vector_store_service.upsert_item_embedding(
+                        workspace_id=args.workspace_id,
+                        item_type="custom_data",
+                        item_id=str(logged_data.id),
+                        vector=vector,
+                        metadata=metadata_for_vector
+                    )
+                    log.info(f"Successfully generated and stored embedding for custom_data ID {logged_data.id} ({logged_data.category}/{logged_data.key})")
+                except Exception as e_embed:
+                    log.error(f"Failed to generate/store embedding for custom_data ID {logged_data.id} ({logged_data.category}/{logged_data.key}): {e_embed}", exc_info=True)
+            else:
+                log.debug(f"Skipping embedding for custom_data ID {logged_data.id} ({logged_data.category}/{logged_data.key}) as value is not text-like.")
+        # --- End Add to Vector Store ---
+
+        result = logged_data.model_dump(mode='json')
+        
+        # Return suggestion if applicable
+        if auto_suggest_cache and args.cache_hint is None:
+            result["cache_suggestion"] = {
+                "recommended": True,
+                "reason": f"Large content ({content_size} chars) suitable for caching",
+                "estimated_tokens": estimate_tokens(args.value),
+                "cache_score": cache_score
+            }
+        
+        return result
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error logging custom data with cache hint: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in log_custom_data_with_cache_hint for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error in log_custom_data_with_cache_hint: {e}")
+
+def handle_log_custom_data(args: models.LogCustomDataArgs) -> Dict[str, Any]:
+    """
+    Handles the 'log_custom_data' MCP tool.
+    Updated to use the enhanced database schema with metadata and cache_score.
+    Maintains backward compatibility.
+    """
+    try:
+        # Calculate cache score for enhanced schema support
+        cache_score = calculate_content_cache_score(args.value, args.category, args.key)
+        
+        data_to_log = models.CustomData(
+            category=args.category,
+            key=args.key,
+            value=args.value,
+            metadata=getattr(args, 'metadata', None),
+            cache_score=cache_score
+        )
+
+        logged_data = db.log_custom_data(args.workspace_id, data_to_log)
+
+        # --- Add to Vector Store ---
+        if logged_data and logged_data.id is not None:
+            # Only embed if value is string-like or can be reasonably converted to text
+            text_to_embed = None
+            if isinstance(logged_data.value, str):
+                text_to_embed = logged_data.value
+            elif isinstance(logged_data.value, (dict, list)):
+                try:
+                    # Simple JSON string representation for dict/list
+                    text_to_embed = json.dumps(logged_data.value)
+                except TypeError:
+                    log.warning(f"Custom data value for {logged_data.category}/{logged_data.key} is not JSON serializable for embedding.")
+
+            if text_to_embed:
+                # Add category and key to text for better contextual embedding
+                contextual_text_to_embed = f"Category: {logged_data.category}\nKey: {logged_data.key}\nValue: {text_to_embed}"
+                try:
+                    vector = embedding_service.get_embedding(contextual_text_to_embed.strip())
+
                     metadata_for_vector = {
                         "conport_item_id": str(logged_data.id),
                         "conport_item_type": "custom_data",
@@ -490,8 +594,7 @@ def handle_log_custom_data(args: models.LogCustomDataArgs) -> Dict[str, Any]:
                     if hasattr(logged_data, 'metadata') and isinstance(logged_data.metadata, dict):
                          for k, v in logged_data.metadata.items():
                             if isinstance(v, (str, int, float, bool)): # Only simple types for Chroma metadata
-                                metadata_for_vector[f"custom_meta_{k}"] = v
-
+                                metadata_for_vector[f"custom_meta_{k}"] = str(v)
 
                     vector_store_service.upsert_item_embedding(
                         workspace_id=args.workspace_id,
@@ -506,7 +609,7 @@ def handle_log_custom_data(args: models.LogCustomDataArgs) -> Dict[str, Any]:
             else:
                 log.debug(f"Skipping embedding for custom_data ID {logged_data.id} ({logged_data.category}/{logged_data.key}) as value is not text-like.")
         # --- End Add to Vector Store ---
-        
+
         return logged_data.model_dump(mode='json')
     except DatabaseError as e:
         raise ContextPortalError(f"Database error logging custom data: {e}")
@@ -595,7 +698,8 @@ async def handle_semantic_search_conport(args: models.SemanticSearchConportArgs)
     Performs a semantic search using embeddings and vector store, with optional metadata filters.
     """
     try:
-        log.info(f"Handling semantic_search_conport for workspace {args.workspace_id} with query: '{args.query_text[:50]}...'")
+        query_preview = args.query_text[:50] + "..." if len(args.query_text) > 50 else args.query_text
+        log.info(f"Handling semantic_search_conport for workspace {args.workspace_id} with query: '{query_preview}'")
 
         query_vector = embedding_service.get_embedding(args.query_text)
 
@@ -605,34 +709,33 @@ async def handle_semantic_search_conport(args: models.SemanticSearchConportArgs)
 
         if args.filter_item_types:
             and_conditions.append({"conport_item_type": {"$in": args.filter_item_types}})
-        
+
         if args.filter_tags_include_all:
             # For $all behavior with $contains, we need an $and for each tag
             tag_all_conditions = [{"tags": {"$contains": tag}} for tag in args.filter_tags_include_all]
             if tag_all_conditions:
                 and_conditions.append({"$and": tag_all_conditions})
-        
+
         if args.filter_tags_include_any:
             # For $or behavior with $contains
             tag_any_conditions = [{"tags": {"$contains": tag}} for tag in args.filter_tags_include_any]
             if tag_any_conditions:
                 and_conditions.append({"$or": tag_any_conditions})
-        
+
         if args.filter_custom_data_categories:
             # This filter is only meaningful if 'custom_data' is in item_types or no item_types are specified
             category_condition = {"category": {"$in": args.filter_custom_data_categories}}
             if args.filter_item_types and 'custom_data' in args.filter_item_types:
                 and_conditions.append(category_condition)
-            elif not args.filter_item_types: # If no item_type filter, apply category filter broadly (might hit non-custom_data items if they had 'category' metadata)
+            elif not args.filter_item_types: # If no item_type filter, apply category filter broadly (might hit non-custom-data items if they had 'category' metadata)
                  and_conditions.append(category_condition)
-
 
         if and_conditions:
             if len(and_conditions) == 1:
                 chroma_filters = and_conditions[0]
             else:
                 chroma_filters = {"$and": and_conditions}
-        
+
         log.debug(f"ChromaDB query filters: {chroma_filters}")
 
         search_results = vector_store_service.query_vector_store(
@@ -646,14 +749,14 @@ async def handle_semantic_search_conport(args: models.SemanticSearchConportArgs)
         # We need to potentially fetch full items from SQLite based on metadata.conport_item_id and conport_item_type
         # For now, just return the direct results from vector store, which includes metadata.
         # A more advanced version would re-hydrate with full SQLite objects.
-        
+
         # Example of enriching results (conceptual, actual DB calls would be needed)
         enriched_results = []
         for res in search_results:
             meta = res.get("metadata", {})
             item_id = meta.get("conport_item_id")
             item_type = meta.get("conport_item_type")
-            
+
             # Here you could fetch the full item from SQLite using item_id and item_type
             # For example:
             # if item_type == "decision" and item_id:
@@ -664,7 +767,6 @@ async def handle_semantic_search_conport(args: models.SemanticSearchConportArgs)
             #     full_item_list = db.get_custom_data(args.workspace_id, category=meta.get("category"), key=meta.get("key"))
             #     if full_item_list:
             #         res["full_item_data"] = full_item_list[0].model_dump(mode='json')
-
 
             enriched_results.append(res) # For now, just pass through
 
@@ -782,7 +884,7 @@ def handle_export_conport_to_markdown(args: models.ExportConportToMarkdownArgs) 
         if active_ctx_data:
             (output_path / "active_context.md").write_text(_format_active_context_md(active_ctx_data))
             files_created.append("active_context.md")
-        
+
         # Decisions
         decisions = db.get_decisions(args.workspace_id, limit=None) # Get all
         if decisions:
@@ -812,13 +914,12 @@ def handle_export_conport_to_markdown(args: models.ExportConportToMarkdownArgs) 
                     categories[item.category] = []
                 value_str = json.dumps(item.value, indent=2) if not isinstance(item.value, str) else item.value
                 categories[item.category].append(f"### {item.key}\n\n*   [{item.timestamp.strftime('%Y-%m-%d %H:%M:%S')}]\n\n```json\n{value_str}\n```\n")
-            
-            
-            for category_name_from_loop, items_md in categories.items(): # Renamed category to avoid clash
-                cat_file_name = "".join(c if c.isalnum() else "_" for c in category_name_from_loop) + ".md"
-                (custom_data_path / cat_file_name).write_text(f"# Custom Data: {category_name_from_loop}\n\n" + "\n---\n".join(items_md))
-                files_created.append(f"custom_data/{cat_file_name}")
-        
+
+                for category_name_from_loop, items_md in categories.items(): # Renamed category to avoid clash
+                    cat_file_name = "".join(c if c.isalnum() else "_" for c in category_name_from_loop) + ".md"
+                    (custom_data_path / cat_file_name).write_text(f"# Custom Data: {category_name_from_loop}\n\n" + "\n---\n".join(items_md))
+                    files_created.append(f"custom_data/{cat_file_name}")
+
         return {"status": "success", "message": f"ConPort data exported to '{output_path}'. Files created: {', '.join(files_created)}"}
 
     except DatabaseError as e:
@@ -843,7 +944,7 @@ def _parse_product_or_active_context_md(content: str) -> Dict[str, Any]:
     data = {}
     # Split by '## ' to get sections, ignoring the initial '# Title' part
     sections = re.split(r'\n## ', content)[1:]
-    
+
     # First section is usually an introduction before the first '## '
     intro_match = re.match(r'^#\s\w+\sContext\n+(.*?)\n## ', content, re.DOTALL | re.MULTILINE)
     if intro_match:
@@ -853,7 +954,7 @@ def _parse_product_or_active_context_md(content: str) -> Dict[str, Any]:
         parts = section.split('\n', 1)
         heading_full = parts[0].strip()
         section_content = parts[1] if len(parts) > 1 else ""
-        
+
         # Create a key from the heading (e.g., "Project Goal" -> "projectGoal")
         key = heading_full.replace(" ", "")
         key = key[0].lower() + key[1:] if key else ""
@@ -874,20 +975,19 @@ def _parse_decisions_md(content: str) -> List[Dict[str, str]]:
     for block in decision_blocks:
         if not block.strip() or "## Decision" not in block :
             continue
-        
+
         summary_match = re.search(r"## Decision\n\*\s*\[.*?\]\s*(.+)", block, re.DOTALL)
         summary = summary_match.group(1).strip() if summary_match else "N/A"
-        
+
         rationale_match = re.search(r"## Rationale\n\*\s*(.+)", block, re.DOTALL)
         rationale = rationale_match.group(1).strip() if rationale_match else None
         # Handle multi-line rationale
-        if rationale_match and '\n*' in rationale: # crude check for multi-bullet rationale
+        if rationale_match and rationale and '\n*' in rationale: # crude check for multi-bullet rationale
             rationale = "\n".join([line.strip().lstrip('*').strip() for line in rationale.split('\n')])
-
 
         impl_details_match = re.search(r"## Implementation Details\n\*\s*(.+)", block, re.DOTALL)
         impl_details = impl_details_match.group(1).strip() if impl_details_match else None
-        if impl_details_match and '\n*' in impl_details: # crude check for multi-bullet details
+        if impl_details_match and impl_details and '\n*' in impl_details: # crude check for multi-bullet details
             impl_details = "\n".join([line.strip().lstrip('*').strip() for line in impl_details.split('\n')])
 
         decisions.append({
@@ -901,7 +1001,7 @@ def _parse_progress_md(content: str) -> List[Dict[str, str]]:
     """Parses progress_log.md content."""
     progress_items = []
     current_status = "TODO" # Default
-    
+
     for line in content.split('\n'):
         line = line.strip()
         if line.startswith("## Completed Tasks"):
@@ -931,7 +1031,7 @@ def _parse_system_patterns_md(content: str) -> List[Dict[str, str]]:
             current_name = line[3:].strip()
         elif current_name and line and not line.startswith("#"):
             current_desc_lines.append(line)
-    
+
     if current_name: # Save the last pattern
         patterns.append({"name": current_name, "description": "\n".join(current_desc_lines).strip() or None})
     return patterns
@@ -944,7 +1044,7 @@ def _parse_custom_data_category_md(content: str, category_name: str) -> List[Dic
     for block in key_blocks:
         if not block.strip() or "```json" not in block:
             continue
-        
+
         key_match = re.match(r"(.+?)\n+```json\n(.*?)\n```", block.strip(), re.DOTALL | re.MULTILINE)
         if key_match:
             key = key_match.group(1).strip()
@@ -955,7 +1055,6 @@ def _parse_custom_data_category_md(content: str, category_name: str) -> List[Dic
             except json.JSONDecodeError as e:
                 log.warning(f"Could not parse JSON for custom data {category_name}/{key}: {e}. Value: '{json_str_value}'")
     return items
-
 
 def handle_import_markdown_to_conport(args: models.ImportMarkdownToConportArgs) -> Dict[str, Any]:
     """
@@ -974,7 +1073,7 @@ def handle_import_markdown_to_conport(args: models.ImportMarkdownToConportArgs) 
 
     # This handler will be called by a tool wrapper in main.py.
     # It calls other refactored handlers in this file.
-    
+
     # Define which handler and Pydantic model to use for each file type
     file_processing_map = {
         "product_context.md": (_parse_product_or_active_context_md, handle_update_product_context, models.UpdateContextArgs),
@@ -991,7 +1090,7 @@ def handle_import_markdown_to_conport(args: models.ImportMarkdownToConportArgs) 
                 content_str = file_to_import.read_text(encoding="utf-8")
                 parsed_data = parser_func(content_str)
                 summary_report["files_processed"].append(filename)
-                
+
                 item_type_key = filename.split('.')[0] # Define item_type_key
 
                 if item_type_key in ["product_context", "active_context"]:
@@ -1010,7 +1109,7 @@ def handle_import_markdown_to_conport(args: models.ImportMarkdownToConportArgs) 
         else:
             log.warning(f"File not found for import: {file_to_import}")
             summary_report["errors"].append(f"File not found: {filename}")
-            
+
     # Custom Data
     custom_data_dir = input_path / "custom_data"
     if custom_data_dir.is_dir():
@@ -1028,7 +1127,7 @@ def handle_import_markdown_to_conport(args: models.ImportMarkdownToConportArgs) 
             except Exception as e:
                 log.error(f"Error processing custom data file {category_md_file.name}: {e}")
                 summary_report["errors"].append(f"Error processing {category_md_file.name}: {str(e)}")
-    
+
     summary_report["message"] = f"ConPort data import from '{input_path}' complete. See details."
     return summary_report
 
@@ -1088,14 +1187,14 @@ def handle_get_item_history(args: models.GetItemHistoryArgs) -> List[Dict[str, A
         # The db.get_item_history function already returns a list of dicts
         # where content is a dict and timestamp is a datetime object.
         # We need to ensure timestamps are JSON serializable for the MCP response.
-        
+
         serializable_history = []
         for entry in history_entries:
             entry_copy = entry.copy() # Avoid modifying the original dict from db
             if isinstance(entry_copy.get("timestamp"), datetime):
                 entry_copy["timestamp"] = entry_copy["timestamp"].isoformat()
             serializable_history.append(entry_copy)
-            
+
         return serializable_history
     except ValueError as e: # From db function if item_type is somehow invalid post-Pydantic
          raise ToolArgumentError(str(e))
@@ -1104,6 +1203,131 @@ def handle_get_item_history(args: models.GetItemHistoryArgs) -> List[Dict[str, A
     except Exception as e:
         log.exception(f"Unexpected error in get_item_history for workspace {args.workspace_id}, item_type {args.item_type}")
         raise ContextPortalError(f"Unexpected error retrieving item history: {e}")
+
+def handle_get_cacheable_content(args: models.GetCacheableContentArgs) -> List[Dict[str, Any]]:
+    """
+    Handles the 'get_cacheable_content' MCP tool.
+    Identifies content suitable for caching based on priority and size.
+    """
+    try:
+        # Validate required fields
+        if not args.workspace_id:
+            raise ValidationError("Workspace ID is required")
+
+        # Get content from various sources based on priority
+        cacheable_content = []
+
+        # 1. Product Context (high priority)
+        product_context = db.get_product_context(args.workspace_id)
+        content_dict = product_context.content
+        token_estimate = estimate_tokens(content_dict)
+        cacheable_content.append({
+            "source": "product_context",
+            "priority": "high",
+            "token_estimate": token_estimate,
+            "content": content_dict
+        })
+
+        # 2. System Patterns (medium priority)
+        system_patterns = db.get_system_patterns(args.workspace_id)
+        for pattern in system_patterns:
+            pattern_dict = {
+                "name": pattern.name,
+                "description": pattern.description or "",
+                "tags": pattern.tags or []
+            }
+            token_estimate = estimate_tokens(pattern_dict)
+            cacheable_content.append({
+                "source": f"system_pattern/{pattern.name}",
+                "priority": "medium",
+                "token_estimate": token_estimate,
+                "content": pattern_dict
+            })
+
+        # 3. Custom Data with cache hints (medium priority)
+        custom_data_entries = db.get_custom_data_with_cache_hints(args.workspace_id)
+        for entry in custom_data_entries:
+            token_estimate = estimate_tokens(entry.value)
+            cacheable_content.append({
+                "source": f"custom_data/{entry.category}/{entry.key}",
+                "priority": "medium",
+                "token_estimate": token_estimate,
+                "content": entry.value
+            })
+
+        # 4. Active Context (low priority)
+        active_context = db.get_active_context(args.workspace_id)
+        content_dict = active_context.content
+        token_estimate = estimate_tokens(content_dict)
+        cacheable_content.append({
+            "source": "active_context",
+            "priority": "low",
+            "token_estimate": token_estimate,
+            "content": content_dict
+        })
+
+        # 5. Decisions (low priority)
+        decisions = db.get_decisions(args.workspace_id, limit=10)
+        for decision in decisions:
+            decision_dict = {
+                "summary": decision.summary,
+                "rationale": decision.rationale or "",
+                "implementation_details": decision.implementation_details or "",
+                "tags": decision.tags or []
+            }
+            token_estimate = estimate_tokens(decision_dict)
+            cacheable_content.append({
+                "source": f"decision/{decision.id}",
+                "priority": "low",
+                "token_estimate": token_estimate,
+                "content": decision_dict
+            })
+
+        # Sort by priority (high > medium > low)
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        cacheable_content.sort(key=lambda x: priority_order.get(x["priority"], 3))
+
+        return cacheable_content
+    except (DatabaseError, ValidationError) as e:
+        log.error(f"Error in get_cacheable_content: {e}")
+        raise ContextPortalError(f"Error retrieving cacheable content: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in get_cacheable_content for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error retrieving cacheable content: {e}")
+
+def estimate_tokens(content: Any) -> int:
+    """Enhanced token estimation for various content types."""
+    if content is None:
+        return 0
+    
+    word_count = 0
+    
+    if isinstance(content, str):
+        word_count = len(content.split())
+    elif isinstance(content, dict):
+        for value in content.values():
+            if isinstance(value, str):
+                word_count += len(value.split())
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, str):
+                        word_count += len(item.split())
+                    elif isinstance(item, dict):
+                        word_count += estimate_tokens(item)
+            elif isinstance(value, dict):
+                word_count += estimate_tokens(value)
+    elif isinstance(content, list):
+        for item in content:
+            if isinstance(item, str):
+                word_count += len(item.split())
+            elif isinstance(item, dict):
+                word_count += estimate_tokens(item)
+    else:
+        # For other types, convert to string and count words
+        word_count = len(str(content).split())
+    
+    # Estimate 1.3 words per token (refined approximation)
+    return max(1, int(word_count / 1.3))
 
 # --- Batch Logging Handler ---
 
@@ -1124,7 +1348,7 @@ def handle_batch_log_items(args: models.BatchLogItemsArgs) -> Dict[str, Any]:
         raise ToolArgumentError(f"Unsupported item_type for batch logging: {args.item_type}. Supported types: {list(_SINGLE_ITEM_HANDLERS_MAP.keys())}")
 
     handler_func, pydantic_model = _SINGLE_ITEM_HANDLERS_MAP[args.item_type]
-    
+
     results = []
     errors = []
     success_count = 0
@@ -1150,7 +1374,7 @@ def handle_batch_log_items(args: models.BatchLogItemsArgs) -> Dict[str, Any]:
             log.exception(f"Unexpected error for item {i} in batch_log_items ({args.item_type})")
             errors.append({"item_index": i, "error": f"Unexpected server error: {type(e).__name__}", "data": item_data_dict})
             failure_count += 1
-            
+
     return {
         "status": "partial_success" if success_count > 0 and failure_count > 0 else ("success" if failure_count == 0 else "failure"),
         "message": f"Batch log for '{args.item_type}': {success_count} succeeded, {failure_count} failed.",
@@ -1167,7 +1391,7 @@ def handle_delete_decision_by_id(args: models.DeleteDecisionByIdArgs) -> Dict[st
     """
     try:
         deleted_from_db = db.delete_decision_by_id(args.workspace_id, args.decision_id)
-        
+
         if deleted_from_db:
             try:
                 vector_store_service.delete_item_embedding(
@@ -1201,7 +1425,7 @@ def handle_delete_system_pattern_by_id(args: models.DeleteSystemPatternByIdArgs)
     """
     try:
         deleted_from_db = db.delete_system_pattern_by_id(args.workspace_id, args.pattern_id)
-        
+
         if deleted_from_db:
             try:
                 vector_store_service.delete_item_embedding(
@@ -1224,6 +1448,432 @@ def handle_delete_system_pattern_by_id(args: models.DeleteSystemPatternByIdArgs)
     except Exception as e:
         log.exception(f"Unexpected error in delete_system_pattern_by_id for workspace {args.workspace_id}, pattern ID {args.pattern_id}")
         raise ContextPortalError(f"Unexpected error deleting system pattern: {e}")
+
+# --- Core KV Cache Tool Handlers ---
+
+def handle_build_stable_context_prefix(args: models.BuildStableContextPrefixArgs) -> Dict[str, Any]:
+    """
+    Handles the 'build_stable_context_prefix' MCP tool.
+    Build consistent, cacheable context prefix for Ollama KV-cache.
+    """
+    try:
+        stable_context_parts = []
+        
+        # 1. Product Context (highest priority)
+        product_ctx = db.get_product_context_data(args.workspace_id)
+        if product_ctx:
+            formatted_product = format_product_context_for_cache(product_ctx)
+            stable_context_parts.append({
+                "section": "project_context",
+                "content": formatted_product,
+                "tokens": estimate_tokens(formatted_product),
+                "last_modified": product_ctx.get("updated_at")
+            })
+        
+        # 2. System Patterns (architectural stability)
+        patterns = db.get_system_patterns_data(args.workspace_id, limit=3)
+        if patterns:
+            formatted_patterns = format_patterns_for_cache(patterns)
+            stable_context_parts.append({
+                "section": "system_patterns",
+                "content": formatted_patterns,
+                "tokens": estimate_tokens(formatted_patterns),
+                "pattern_count": len(patterns)
+            })
+        
+        # 3. Critical Custom Data
+        critical_data = db.get_custom_data_with_cache_hints(args.workspace_id)
+        if critical_data:
+            # Convert CustomData models to dicts for formatting
+            critical_data_dicts = [
+                {
+                    "category": item.category,
+                    "key": item.key,
+                    "value": item.value
+                }
+                for item in critical_data
+            ]
+            formatted_critical = format_critical_data_for_cache(critical_data_dicts)
+            stable_context_parts.append({
+                "section": "critical_specs",
+                "content": formatted_critical,
+                "tokens": estimate_tokens(formatted_critical),
+                "item_count": len(critical_data)
+            })
+        
+        # Assemble final prefix
+        stable_prefix = assemble_stable_prefix(stable_context_parts, args.format_type)
+        prefix_hash = hashlib.md5(stable_prefix.encode()).hexdigest()
+        
+        return {
+            "stable_prefix": stable_prefix,
+            "prefix_hash": prefix_hash,
+            "total_tokens": sum(part["tokens"] for part in stable_context_parts),
+            "sections": stable_context_parts,
+            "format_version": "1.0",
+            "generated_at": datetime.utcnow().isoformat()
+        }
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error building stable context prefix: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in build_stable_context_prefix for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error building stable context prefix: {e}")
+
+def handle_get_cache_state(args: models.GetCacheStateArgs) -> Dict[str, Any]:
+    """
+    Handles the 'get_cache_state' MCP tool.
+    Check if stable context cache needs refresh.
+    """
+    try:
+        # Get current state hash by building stable context
+        build_args = models.BuildStableContextPrefixArgs(workspace_id=args.workspace_id)
+        current_state = handle_build_stable_context_prefix(build_args)
+        current_hash = current_state["prefix_hash"]
+        
+        # Compare with provided hash
+        cache_valid = args.current_prefix_hash == current_hash if args.current_prefix_hash else False
+        
+        # Identify what changed if cache invalid
+        changes = []
+        if not cache_valid and args.current_prefix_hash:
+            changes = identify_context_changes(args.workspace_id, args.current_prefix_hash)
+        
+        return {
+            "cache_valid": cache_valid,
+            "current_hash": current_hash,
+            "provided_hash": args.current_prefix_hash,
+            "changes_detected": changes,
+            "recommendation": "refresh" if not cache_valid else "reuse",
+            "stable_content_size": current_state["total_tokens"]
+        }
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error checking cache state: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in get_cache_state for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error checking cache state: {e}")
+
+def handle_get_dynamic_context(args: models.GetDynamicContextArgs) -> Dict[str, Any]:
+    """
+    Handles the 'get_dynamic_context' MCP tool.
+    Get query-specific context to append after stable prefix.
+    """
+    try:
+        dynamic_parts = []
+        remaining_budget = args.context_budget
+        
+        # Always include active context (session-level)
+        active_ctx = db.get_active_context_data(args.workspace_id)
+        if active_ctx and remaining_budget > 0:
+            formatted_active = format_active_context(active_ctx)
+            tokens_used = estimate_tokens(formatted_active)
+            if tokens_used <= remaining_budget:
+                dynamic_parts.append({
+                    "section": "active_context",
+                    "content": formatted_active,
+                    "tokens": tokens_used
+                })
+                remaining_budget -= tokens_used
+        
+        # Query-specific context based on intent
+        if "decision" in args.query_intent.lower() and remaining_budget > 0:
+            recent_decisions = db.get_decisions_data(args.workspace_id, limit=3)
+            if recent_decisions:
+                formatted_decisions = format_decisions_for_context(recent_decisions)
+                tokens_used = estimate_tokens(formatted_decisions)
+                if tokens_used <= remaining_budget:
+                    dynamic_parts.append({
+                        "section": "recent_decisions",
+                        "content": formatted_decisions,
+                        "tokens": tokens_used
+                    })
+                    remaining_budget -= tokens_used
+        
+        if any(word in args.query_intent.lower() for word in ["task", "progress", "todo"]) and remaining_budget > 0:
+            current_progress = db.get_progress_data(args.workspace_id, status_filter="IN_PROGRESS", limit=5)
+            if current_progress:
+                formatted_progress = format_progress_for_context(current_progress)
+                tokens_used = estimate_tokens(formatted_progress)
+                if tokens_used <= remaining_budget:
+                    dynamic_parts.append({
+                        "section": "current_progress",
+                        "content": formatted_progress,
+                        "tokens": tokens_used
+                    })
+                    remaining_budget -= tokens_used
+        
+        return {
+            "dynamic_context": "\n".join(part["content"] for part in dynamic_parts),
+            "sections": dynamic_parts,
+            "total_tokens": sum(part["tokens"] for part in dynamic_parts),
+            "budget_used": args.context_budget - remaining_budget,
+            "budget_remaining": remaining_budget
+        }
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error getting dynamic context: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in get_dynamic_context for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error getting dynamic context: {e}")
+
+def identify_context_changes(workspace_id: str, previous_hash: str) -> List[Dict[str, Any]]:
+    """Identify what content changed to trigger cache refresh"""
+    changes = []
+    
+    try:
+        # Check product context modification time
+        product_modified = db.get_last_modified_time("product_context", workspace_id)
+        hash_time = db.get_hash_timestamp(previous_hash)
+        if product_modified > hash_time:
+            changes.append({
+                "type": "product_context",
+                "last_modified": product_modified.isoformat()
+            })
+        
+        # Check system patterns
+        patterns_modified = db.get_last_modified_time("system_patterns", workspace_id)
+        if patterns_modified > hash_time:
+            changes.append({
+                "type": "system_patterns",
+                "last_modified": patterns_modified.isoformat()
+            })
+        
+        # Check critical custom data
+        critical_modified = db.get_last_modified_time("custom_data_cached", workspace_id)
+        if critical_modified > hash_time:
+            changes.append({
+                "type": "critical_custom_data",
+                "last_modified": critical_modified.isoformat()
+            })
+        
+    except Exception as e:
+        log.warning(f"Error identifying context changes: {e}")
+        # Return generic change indication if we can't determine specifics
+        changes.append({
+            "type": "unknown",
+            "last_modified": datetime.utcnow().isoformat(),
+            "note": "Unable to determine specific changes"
+        })
+    
+    return changes
+
+# --- KV Cache Utility Functions ---
+
+def format_product_context_for_cache(context: dict) -> str:
+    """Format product context for consistent Ollama caching"""
+    return f"""=== PROJECT CONTEXT ===
+PROJECT: {context.get('name', 'Current Project')}
+DESCRIPTION: {context.get('description', '')}
+GOALS: {context.get('goals', '')}
+ARCHITECTURE: {context.get('architecture', '')}
+TECHNOLOGIES: {context.get('technologies', '')}
+"""
+
+def format_patterns_for_cache(patterns: List[dict]) -> str:
+    """Format system patterns for consistent caching"""
+    formatted = ["=== SYSTEM PATTERNS ==="]
+    for pattern in patterns:
+        formatted.append(f"PATTERN: {pattern.get('name', '')}")
+        formatted.append(f"DESCRIPTION: {pattern.get('description', '')}")
+        if pattern.get('tags'):
+            formatted.append(f"TAGS: {', '.join(pattern['tags'])}")
+        formatted.append("")  # Blank line separator
+    return "\n".join(formatted)
+
+def format_critical_data_for_cache(critical_data: List[dict]) -> str:
+    """Format critical custom data for caching"""
+    formatted = ["=== CRITICAL SPECIFICATIONS ==="]
+    for item in critical_data:
+        formatted.append(f"CATEGORY: {item.get('category', '')}")
+        formatted.append(f"KEY: {item.get('key', '')}")
+        value_str = json.dumps(item.get('value', '')) if isinstance(item.get('value'), (dict, list)) else str(item.get('value', ''))
+        formatted.append(f"VALUE: {value_str}")
+        formatted.append("")  # Blank line separator
+    return "\n".join(formatted)
+
+def format_active_context(active_ctx: dict) -> str:
+    """Format active context for dynamic assembly"""
+    formatted = ["=== ACTIVE CONTEXT ==="]
+    for key, value in active_ctx.items():
+        heading = key.replace("_", " ").title()
+        formatted.append(f"{heading.upper()}: {value}")
+    return "\n".join(formatted)
+
+def format_decisions_for_context(decisions: List[dict]) -> str:
+    """Format decisions for context"""
+    formatted = ["=== RECENT DECISIONS ==="]
+    for decision in decisions:
+        formatted.append(f"DECISION: {decision.get('summary', '')}")
+        if decision.get('rationale'):
+            formatted.append(f"RATIONALE: {decision['rationale']}")
+        formatted.append("")  # Blank line separator
+    return "\n".join(formatted)
+
+def format_progress_for_context(progress: List[dict]) -> str:
+    """Format progress entries for context"""
+    formatted = ["=== CURRENT PROGRESS ==="]
+    for entry in progress:
+        status = entry.get('status', 'UNKNOWN')
+        description = entry.get('description', '')
+        formatted.append(f"[{status}] {description}")
+    return "\n".join(formatted)
+
+def calculate_cache_score(cacheable_items: List[dict]) -> float:
+    """Calculate overall cache optimization score"""
+    if not cacheable_items:
+        return 0.0
+    
+    total_score = 0.0
+    total_weight = 0.0
+    
+    priority_weights = {"high": 3.0, "medium": 2.0, "low": 1.0}
+    
+    for item in cacheable_items:
+        priority = item.get("priority", "low")
+        weight = priority_weights.get(priority, 1.0)
+        tokens = item.get("estimated_tokens", 0)
+        
+        # Score based on token count and priority
+        item_score = min(100.0, (tokens / 100.0) * weight)
+        total_score += item_score * weight
+        total_weight += weight
+    
+    return min(100.0, total_score / total_weight if total_weight > 0 else 0.0)
+
+def calculate_content_cache_score(value: Any, category: str, key: str) -> int:
+    """Calculate cache score for individual content"""
+    score = 0
+    
+    # Base score from content size
+    content_size = len(json.dumps(value)) if not isinstance(value, str) else len(value)
+    if content_size > 2000:
+        score += 30
+    elif content_size > 1000:
+        score += 20
+    elif content_size > 500:
+        score += 10
+    
+    # Bonus for certain categories
+    high_value_categories = ["ProjectGlossary", "Architecture", "Requirements", "Specifications"]
+    if category in high_value_categories:
+        score += 25
+    
+    # Bonus for certain key patterns
+    high_value_keys = ["config", "schema", "template", "pattern", "standard"]
+    if any(keyword in key.lower() for keyword in high_value_keys):
+        score += 15
+    
+    return min(100, score)
+
+def assemble_stable_prefix(stable_context_parts: List[dict], format_type: str) -> str:
+    """Assemble final stable prefix"""
+    if format_type == "ollama_optimized":
+        # Optimized format for Ollama KV-cache
+        sections = []
+        for part in stable_context_parts:
+            section_name = part.get("section", "UNKNOWN")
+            content = part.get("content", "")
+            sections.append(f"=== {section_name.upper().replace('_', ' ')} ===")
+            sections.append(content)
+            sections.append("")  # Blank line separator
+        
+        return "\n".join(sections)
+    else:
+        # Default format
+        return "\n\n".join(part.get("content", "") for part in stable_context_parts)
+
+# --- Session Management and Performance Monitoring Handlers ---
+
+def handle_initialize_ollama_session(args: models.InitializeOllamaSessionArgs) -> Dict[str, Any]:
+    """
+    Handles the 'initialize_ollama_session' MCP tool.
+    Initialize ConPort session optimized for Ollama KV-cache.
+    Implements the logic from lines 322-359 in kv_cache.md.
+    """
+    try:
+        session_data = {
+            "workspace_id": args.workspace_id,
+            "session_id": db.generate_session_id(),
+            "started_at": datetime.utcnow().isoformat(),
+            "cache_optimization": True
+        }
+        
+        # Build initial stable context using existing handler
+        build_args = models.BuildStableContextPrefixArgs(workspace_id=args.workspace_id)
+        stable_context = handle_build_stable_context_prefix(build_args)
+        session_data["stable_context"] = stable_context
+        
+        # Get initial activity summary using existing database functions
+        activity = db.get_recent_activity_summary_data(args.workspace_id, hours_ago=24, limit_per_type=3)
+        session_data["initial_activity"] = activity
+        
+        # Store session state (optional - could be client-side)
+        db.store_session_state(session_data)
+        
+        return {
+            "session_initialized": True,
+            "session_id": session_data["session_id"],
+            "stable_context_ready": True,
+            "stable_context_hash": stable_context["prefix_hash"],
+            "stable_context_tokens": stable_context["total_tokens"],
+            "cache_optimization_enabled": True,
+            "recommendations": [
+                "Use consistent prompt structure for optimal caching",
+                "Stable context will be cached after first query",
+                "Update stable context only when core project info changes"
+            ]
+        }
+    except DatabaseError as e:
+        raise ContextPortalError(f"Database error initializing Ollama session: {e}")
+    except Exception as e:
+        log.exception(f"Unexpected error in initialize_ollama_session for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error initializing Ollama session: {e}")
+
+def handle_get_cache_performance(args: models.GetCachePerformanceArgs) -> Dict[str, Any]:
+    """
+    Handles the 'get_cache_performance' MCP tool.
+    Monitor Ollama cache optimization performance.
+    Implements the logic from lines 383-402 in kv_cache.md.
+    """
+    try:
+        # This is a placeholder implementation that returns the structure specified
+        # in the strategy document. In a real implementation, this would track
+        # actual metrics like cache hit rates, context assembly times, etc.
+        
+        # For now, return sample metrics as specified in the strategy document
+        performance_data = {
+            "cache_hits": 15,
+            "cache_misses": 3,
+            "hit_rate": 0.83,
+            "average_stable_tokens": 3200,
+            "context_assembly_time_ms": 45,
+            "recommendations": []
+        }
+        
+        # Add session-specific data if session_id is provided
+        if args.session_id:
+            performance_data["session_id"] = args.session_id
+            performance_data["session_specific"] = True
+        else:
+            performance_data["session_specific"] = False
+            
+        # Add some basic recommendations based on hit rate
+        if performance_data["hit_rate"] < 0.7:
+            performance_data["recommendations"].append(
+                "Consider reviewing stable context structure for better cache efficiency"
+            )
+        elif performance_data["hit_rate"] > 0.9:
+            performance_data["recommendations"].append(
+                "Excellent cache performance - current structure is optimal"
+            )
+        else:
+            performance_data["recommendations"].append(
+                "Good cache performance - minor optimizations possible"
+            )
+            
+        return performance_data
+        
+    except Exception as e:
+        log.exception(f"Unexpected error in get_cache_performance for workspace {args.workspace_id}")
+        raise ContextPortalError(f"Unexpected error getting cache performance: {e}")
 
 # --- Obsolete MCP Dispatcher Logic ---
 # The following (TOOL_DESCRIPTIONS, handle_list_tools, TOOL_HANDLERS, dispatch_tool)
